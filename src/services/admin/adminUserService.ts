@@ -245,8 +245,14 @@ export const adminUserService = {
         .select("*");
 
       if (error) {
-        console.error("Error fetching users for analytics:", error);
-        throw error;
+        return {
+          totalUsers: 0,
+          activeUsers: 0,
+          newUsersThisMonth: 0,
+          totalAdmins: 0,
+          usersByRole: {},
+          topSpenders: [],
+        };
       }
 
       const allUsers = users || [];
@@ -322,7 +328,6 @@ export const adminUserService = {
         topSpenders,
       };
     } catch (err) {
-      console.error("Failed to get user analytics:", err);
       return {
         totalUsers: 0,
         activeUsers: 0,

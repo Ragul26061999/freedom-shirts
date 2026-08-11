@@ -1,27 +1,6 @@
-import { supabase } from "@/lib/supabase/client";
+import { db } from "@/lib/firebase/client";
+import { collection, doc, getDoc, getDocs, query, where, orderBy, updateDoc } from "firebase/firestore";
 import { OrderType } from "@/types";
-
-// Strongly-typed helper interfaces
-interface OrderItemWithProductFromSupabase {
-  id: number;
-  order_id: number;
-  product_id: string;
-  quantity: number;
-  price: number;
-  products: {
-    product_id: string;
-    title: string;
-    image: string;
-  };
-}
-
-interface CustomerStat {
-  userId: string;
-  username: string;
-  email: string;
-  totalOrders: number;
-  totalSpent: number;
-}
 
 export interface OrderWithDetails extends Omit<OrderType, "order_items"> {
   profile?: {
@@ -36,8 +15,8 @@ export interface OrderWithDetails extends Omit<OrderType, "order_items"> {
     country: string;
   };
   order_items?: Array<{
-    id: number;
-    order_id: number;
+    id: string;
+    order_id: string;
     product_id: string;
     quantity: number;
     price: number;
@@ -58,6 +37,14 @@ export interface OrderFilters {
   maxAmount?: number;
 }
 
+export interface CustomerStat {
+  userId: string;
+  username: string;
+  email: string;
+  totalOrders: number;
+  totalSpent: number;
+}
+
 export interface OrderAnalytics {
   totalOrders: number;
   totalRevenue: number;
@@ -67,369 +54,156 @@ export interface OrderAnalytics {
   topCustomers: CustomerStat[];
 }
 
-/**
- * Admin service for order management
- * Requires admin privileges for all operations
- */
 export const adminOrderService = {
-  /**
-   * Get all orders with filters and pagination
-   */
   async getAllOrders(
     filters: OrderFilters = {},
     page: number = 1,
     limit: number = 50,
   ): Promise<{ orders: OrderWithDetails[]; total: number }> {
     try {
-      let query = supabase.from("orders").select(`
-					*,
-					profiles!orders_user_id_fkey (
-						username,
-						email
-					),
-					addresses!orders_shipping_address_id_fkey (
-						street,
-						city,
-						state,
-						zip_code,
-						country
-					)
-				`);
+      let q = collection(db, "orders") as any;
 
-      // Apply filters
       if (filters.status) {
-        query = query.eq("status", filters.status);
+        q = query(q, where("status", "==", filters.status));
       }
       if (filters.userId) {
-        query = query.eq("user_id", filters.userId);
+        q = query(q, where("user_id", "==", filters.userId));
       }
+
+      q = query(q, orderBy("created_at", "desc"));
+      const snapshot = await getDocs(q);
+      let docs = snapshot.docs;
+
+      // Manual filtering for range/amount since Firestore doesn't support multiple inequalities well
       if (filters.dateFrom) {
-        query = query.gte("created_at", filters.dateFrom);
+        docs = docs.filter((d: any) => d.data().created_at >= filters.dateFrom!);
       }
       if (filters.dateTo) {
-        query = query.lte("created_at", filters.dateTo);
+        docs = docs.filter((d: any) => d.data().created_at <= filters.dateTo!);
       }
       if (filters.minAmount) {
-        query = query.gte("total", filters.minAmount);
+        docs = docs.filter((d: any) => d.data().total >= filters.minAmount!);
       }
       if (filters.maxAmount) {
-        query = query.lte("total", filters.maxAmount);
+        docs = docs.filter((d: any) => d.data().total <= filters.maxAmount!);
       }
 
-      // Get total count for pagination
-      const countQuery = supabase
-        .from("orders")
-        .select("*", { count: "exact", head: true });
-      const { count } = await countQuery;
+      const total = docs.length;
+      
+      // Pagination
+      const start = (page - 1) * limit;
+      const paginatedDocs = docs.slice(start, start + limit);
 
-      // Get paginated results
-      const { data, error } = await query
-        .order("created_at", { ascending: false })
-        .range((page - 1) * limit, page * limit - 1);
+      const orders = await Promise.all(
+        paginatedDocs.map(async (d: any) => {
+          const data = d.data();
+          let profile = null;
+          if (data.user_id) {
+            const profileDoc = await getDoc(doc(db, "profiles", data.user_id));
+            if (profileDoc.exists()) profile = profileDoc.data();
+          }
 
-      if (error) {
-        console.error("Error fetching all orders:", error);
-        throw error;
-      }
+          let address = null;
+          if (data.address_id) {
+            const addressDoc = await getDoc(doc(db, "addresses", data.address_id));
+            if (addressDoc.exists()) address = addressDoc.data();
+          }
 
-      // Format the data
-      const orders: OrderWithDetails[] = (data || []).map((order) => ({
-        ...order,
-        profile: order.profiles,
-        shipping_address: order.addresses,
-      }));
-
-      return {
-        orders,
-        total: count || 0,
-      };
-    } catch (err) {
-      console.error("Failed to get all orders:", err);
-      throw err;
-    }
-  },
-
-  /**
-   * Get order details with items
-   */
-  async getOrderDetails(orderId: number): Promise<OrderWithDetails | null> {
-    try {
-      const { data, error } = await supabase
-        .from("orders")
-        .select(
-          `
-					*,
-					profiles!orders_user_id_fkey (
-						username,
-						email
-					),
-					addresses!orders_shipping_address_id_fkey (
-						street,
-						city,
-						state,
-						zip_code,
-						country
-					),
-					order_items (
-						id,
-						quantity,
-						price,
-						products (
-							product_id,
-							title,
-							image
-						)
-					)
-				`,
-        )
-        .eq("id", orderId)
-        .single();
-
-      if (error) {
-        console.error("Error fetching order details:", error);
-        throw error;
-      }
-
-      return {
-        ...data,
-        profile: data.profiles,
-        shipping_address: data.addresses,
-        order_items: (
-          data.order_items as OrderItemWithProductFromSupabase[] | undefined
-        )?.map((item) => ({
-          ...item,
-          product: item.products,
-        })),
-      };
-    } catch (err) {
-      console.error("Failed to get order details:", err);
-      return null;
-    }
-  },
-
-  /**
-   * Update order status
-   */
-  async updateOrderStatus(orderId: number, status: string): Promise<OrderType> {
-    try {
-      const validStatuses = [
-        "pending",
-        "processing",
-        "shipped",
-        "delivered",
-        "cancelled",
-      ];
-
-      if (!validStatuses.includes(status)) {
-        throw new Error(`Invalid status: ${status}`);
-      }
-
-      const { data, error } = await supabase
-        .from("orders")
-        .update({
-          status,
-          updated_at: new Date().toISOString(),
+          return {
+            id: d.id,
+            ...data,
+            profile,
+            shipping_address: address,
+          } as OrderWithDetails;
         })
-        .eq("id", orderId)
-        .select()
-        .single();
+      );
 
-      if (error) {
-        console.error("Error updating order status:", error);
-        throw error;
-      }
-
-      return data;
-    } catch (err) {
-      console.error("Failed to update order status:", err);
-      throw err;
+      return { orders, total };
+    } catch (error) {
+      console.error("Error fetching all orders:", error);
+      throw error;
     }
   },
 
-  /**
-   * Get order analytics
-   */
   async getOrderAnalytics(): Promise<OrderAnalytics> {
     try {
-      // Get all orders for analytics
-      const { data: orders, error } = await supabase
-        .from("orders")
-        .select(
-          `
-					*,
-					profiles (
-						username,
-						email
-					)
-				`,
-        )
-        .order("created_at", { ascending: false });
+      const snapshot = await getDocs(collection(db, "orders"));
+      const orders = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as any));
+      
+      let totalRevenue = 0;
+      const ordersByStatus: Record<string, number> = {};
+      const customerMap: Record<string, CustomerStat> = {};
 
-      if (error) {
-        console.error("Error fetching orders for analytics:", error);
-        throw error;
-      }
+      orders.forEach((order) => {
+        totalRevenue += order.total || 0;
+        const status = order.status || "unknown";
+        ordersByStatus[status] = (ordersByStatus[status] || 0) + 1;
 
-      const allOrders = orders || [];
-
-      // Calculate basic metrics
-      const totalOrders = allOrders.length;
-      const totalRevenue = allOrders.reduce(
-        (sum, order) => sum + order.total,
-        0,
-      );
-      const averageOrderValue =
-        totalOrders > 0 ? totalRevenue / totalOrders : 0;
-
-      // Orders by status
-      const ordersByStatus = allOrders.reduce(
-        (acc, order) => {
-          acc[order.status] = (acc[order.status] || 0) + 1;
-          return acc;
-        },
-        {} as Record<string, number>,
-      );
-
-      // Recent orders (last 10)
-      const recentOrders = allOrders.slice(0, 10).map((order) => ({
-        ...order,
-        profile: order.profiles,
-      }));
-
-      // Top customers
-      const customerStats = allOrders.reduce<Record<string, CustomerStat>>(
-        (acc, order) => {
-          const userId = order.user_id;
-          if (!acc[userId]) {
-            acc[userId] = {
-              userId,
-              username: order.profiles?.username || "Unknown",
-              email: order.profiles?.email || "Unknown",
+        if (order.user_id) {
+          if (!customerMap[order.user_id]) {
+            customerMap[order.user_id] = {
+              userId: order.user_id,
+              username: "User",
+              email: "User",
               totalOrders: 0,
-              totalSpent: 0,
+              totalSpent: 0
             };
           }
-          acc[userId].totalOrders += 1;
-          acc[userId].totalSpent += order.total;
-          return acc;
-        },
-        {},
+          customerMap[order.user_id].totalOrders += 1;
+          customerMap[order.user_id].totalSpent += order.total || 0;
+        }
+      });
+
+      const topCustomers = Object.values(customerMap)
+        .sort((a, b) => b.totalSpent - a.totalSpent)
+        .slice(0, 5);
+
+      // Fetch customer details
+      for (const customer of topCustomers) {
+        const pDoc = await getDoc(doc(db, "profiles", customer.userId));
+        if (pDoc.exists()) {
+          customer.username = pDoc.data()?.username || "User";
+          customer.email = pDoc.data()?.email || "User";
+        }
+      }
+
+      // get 5 most recent orders
+      const recentOrdersList = orders
+        .sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime())
+        .slice(0, 5);
+        
+      const recentOrders = await Promise.all(
+        recentOrdersList.map(async (data: any) => {
+          let profile = null;
+          if (data.user_id) {
+            const profileDoc = await getDoc(doc(db, "profiles", data.user_id));
+            if (profileDoc.exists()) profile = profileDoc.data();
+          }
+          return { ...data, profile } as OrderWithDetails;
+        })
       );
 
-      const topCustomers: CustomerStat[] = Object.values(customerStats)
-        .sort((a, b) => b.totalSpent - a.totalSpent)
-        .slice(0, 10);
-
       return {
-        totalOrders,
-        totalRevenue: Number(totalRevenue.toFixed(2)),
-        averageOrderValue: Number(averageOrderValue.toFixed(2)),
+        totalOrders: orders.length,
+        totalRevenue,
+        averageOrderValue: orders.length > 0 ? totalRevenue / orders.length : 0,
         ordersByStatus,
         recentOrders,
-        topCustomers,
+        topCustomers
       };
-    } catch (err) {
-      console.error("Failed to get order analytics:", err);
-      return {
-        totalOrders: 0,
-        totalRevenue: 0,
-        averageOrderValue: 0,
-        ordersByStatus: {},
-        recentOrders: [],
-        topCustomers: [],
-      };
+    } catch (error) {
+      console.error("Error fetching order analytics:", error);
+      throw error;
     }
   },
 
-  /**
-   * Cancel an order
-   */
-  async cancelOrder(orderId: number): Promise<OrderType> {
+  async updateOrderStatus(orderId: string, status: string): Promise<boolean> {
     try {
-      const { data, error } = await supabase
-        .from("orders")
-        .update({
-          status: "cancelled",
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", orderId)
-        .select()
-        .single();
-
-      if (error) {
-        console.error("Error cancelling order:", error);
-        throw error;
-      }
-
-      // Optionally restore product stock
-      const orderDetails = await this.getOrderDetails(orderId);
-      if (orderDetails?.order_items) {
-        await Promise.all(
-          orderDetails.order_items.map(async (item) => {
-            // Get current stock
-            const { data: product } = await supabase
-              .from("products")
-              .select("stock")
-              .eq("product_id", item.product.product_id)
-              .single();
-
-            if (product) {
-              // Restore stock
-              await supabase
-                .from("products")
-                .update({
-                  stock: product.stock + item.quantity,
-                  updated_at: new Date().toISOString(),
-                })
-                .eq("product_id", item.product.product_id);
-            }
-          }),
-        );
-      }
-
-      return data;
-    } catch (err) {
-      console.error("Failed to cancel order:", err);
-      throw err;
+      await updateDoc(doc(db, "orders", orderId), { status });
+      return true;
+    } catch (error) {
+      console.error("Error updating order status:", error);
+      return false;
     }
-  },
-
-  /**
-   * Get orders requiring attention (pending for too long, payment issues, etc.)
-   */
-  async getOrdersRequiringAttention(): Promise<OrderWithDetails[]> {
-    try {
-      const threeDaysAgo = new Date();
-      threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
-
-      const { data, error } = await supabase
-        .from("orders")
-        .select(
-          `
-					*,
-					profiles (
-						username,
-						email
-					)
-				`,
-        )
-        .or(
-          `status.eq.pending.and.created_at.lt.${threeDaysAgo.toISOString()},status.eq.processing.and.created_at.lt.${threeDaysAgo.toISOString()}`,
-        )
-        .order("created_at", { ascending: true });
-
-      if (error) {
-        console.error("Error fetching orders requiring attention:", error);
-        throw error;
-      }
-
-      return (data || []).map((order) => ({
-        ...order,
-        profile: order.profiles,
-      }));
-    } catch (err) {
-      console.error("Failed to get orders requiring attention:", err);
-      return [];
-    }
-  },
+  }
 };

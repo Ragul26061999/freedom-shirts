@@ -1,20 +1,18 @@
-import { supabase } from '@/lib/supabase/client';
 import { ProductType } from '../../types';
-import { isNoRowsError, toUserFacingQueryError } from '@/utils/errorHandling';
+import { toUserFacingQueryError } from '@/utils/errorHandling';
 
 export const productService = {
   async getProducts(): Promise<ProductType[]> {
     try {
-      const { data, error } = await supabase
-        .from('products')
-        .select('*, category:categories(*)')
-        .order('title');
+      const response = await fetch('/api/products');
+      if (!response.ok) throw new Error('Failed to fetch products');
+      const data = await response.json();
+      const products: ProductType[] = data.products;
 
-      if (error) {
-        throw toUserFacingQueryError('Products', error);
-      }
-
-      return data as ProductType[];
+      const now = new Date();
+      return products
+        .sort((a, b) => (a.title || '').localeCompare(b.title || ''))
+        .filter(p => !p.expiry_date || new Date(p.expiry_date) >= now);
     } catch (error) {
       throw error instanceof Error
         ? error
@@ -24,20 +22,19 @@ export const productService = {
 
   async getProductById(id: string): Promise<ProductType | null> {
     try {
-      const { data, error } = await supabase
-        .from('products')
-        .select('*, category:categories(*)')
-        .eq('product_id', id)
-        .single();
-
-      if (error) {
-        if (isNoRowsError(error)) {
-          return null;
-        }
-        throw toUserFacingQueryError('Product', error);
+      const response = await fetch(`/api/products/${id}`);
+      if (!response.ok) {
+        if (response.status === 404) return null;
+        throw new Error('Failed to fetch product');
       }
+      const data = await response.json();
+      const product: ProductType = data.product;
 
-      return data as ProductType;
+      const now = new Date();
+      if (product.expiry_date && new Date(product.expiry_date) < now) {
+        return null; // Product is expired
+      }
+      return product;
     } catch (error) {
       throw error instanceof Error
         ? error
@@ -45,19 +42,17 @@ export const productService = {
     }
   },
 
-  async getProductsByCategory(categoryId: number): Promise<ProductType[]> {
+  async getProductsByCategory(categoryId: number | string): Promise<ProductType[]> {
     try {
-      const { data, error } = await supabase
-        .from('products')
-        .select('*, category:categories(*)')
-        .eq('category_id', categoryId)
-        .order('title');
+      const response = await fetch(`/api/products?category_id=${categoryId}`);
+      if (!response.ok) throw new Error('Failed to fetch products by category');
+      const data = await response.json();
+      const products: ProductType[] = data.products;
 
-      if (error) {
-        throw toUserFacingQueryError('Products', error);
-      }
-
-      return data as ProductType[];
+      const now = new Date();
+      return products
+        .sort((a, b) => (a.title || '').localeCompare(b.title || ''))
+        .filter(p => !p.expiry_date || new Date(p.expiry_date) >= now);
     } catch (error) {
       throw error instanceof Error
         ? error

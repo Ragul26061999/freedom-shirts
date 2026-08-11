@@ -33,6 +33,11 @@ export const getCurrentUser = async (): Promise<ProfileType | null> => {
       return null;
     }
 
+    // Force admin role for the designated admin email
+    if (user.email === 'innovacentra@gmail.com') {
+      profile.role = 'admin';
+    }
+
     return profile;
   } catch (error) {
     console.error("Error getting current user:", error);

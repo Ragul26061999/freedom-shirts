@@ -174,6 +174,31 @@ export const orderService = {
       }
 
       console.log("Order and items created successfully");
+
+      // Reduce stock for each purchased product
+      for (const item of items) {
+        const { data: productData } = await supabase
+          .from("products")
+          .select("stock")
+          .eq("product_id", item.product_id)
+          .single();
+
+        if (productData) {
+          const newStock = Math.max(0, productData.stock - item.quantity);
+          await supabase
+            .from("products")
+            .update({
+              stock: newStock,
+              updated_at: new Date().toISOString(),
+            })
+            .eq("product_id", item.product_id);
+
+          console.log(
+            `Stock reduced for product ${item.product_id}: ${productData.stock} → ${newStock}`,
+          );
+        }
+      }
+
       return order;
     } catch (error) {
       console.error("Error in createOrder:", error);
@@ -259,5 +284,23 @@ export const orderService = {
       throw error;
     }
     return true;
+  },
+
+  async cancelOrder(orderId: string, reason: string) {
+    const { data, error } = await supabase
+      .from("orders")
+      .update({ 
+        status: "cancelled",
+        cancellation_reason: reason
+      })
+      .eq("id", orderId)
+      .select()
+      .single();
+
+    if (error) {
+      toast.error("Failed to cancel order");
+      throw error;
+    }
+    return data;
   },
 };

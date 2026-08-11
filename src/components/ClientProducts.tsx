@@ -8,17 +8,10 @@ import { ProductType } from "@/types";
 import { ErrorState } from "@/components/ErrorState";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { ProductFilter } from "@/components/ProductFilter";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
+import { useSearchParams } from "next/navigation";
+import { useCategories } from "@/hooks/queries/use-categories";
 
-// Helper functions (moved from hook to component for simplicity)
-const getCategoryId = (categoryName: string): number | null => {
-  const categoryMap: { [key: string]: number } = {
-    electronics: 3,
-    clothing: 1,
-    accessories: 2,
-  };
-  return categoryMap[categoryName] || null;
-};
 
 // Sort products based on the selected option
 const sortProducts = (
@@ -33,9 +26,9 @@ const sortProducts = (
     case "price-desc":
       return sorted.sort((a, b) => b.price - a.price);
     case "name-asc":
-      return sorted.sort((a, b) => a.title.localeCompare(b.title));
+      return sorted.sort((a, b) => (a.title || '').localeCompare(b.title || ''));
     case "name-desc":
-      return sorted.sort((a, b) => b.title.localeCompare(a.title));
+      return sorted.sort((a, b) => (b.title || '').localeCompare(a.title || ''));
     default:
       return sorted;
   }
@@ -54,8 +47,8 @@ const filterProducts = (products: ProductType[], filters: FilterOptions) => {
 
   // Filter by category (only if not 'all')
   if (filters.categoryFilter !== "all") {
-    const categoryId = getCategoryId(filters.categoryFilter);
-    if (categoryId !== null) {
+    const categoryId = parseInt(filters.categoryFilter, 10);
+    if (!isNaN(categoryId)) {
       filtered = filtered.filter(
         (product) => product.category_id === categoryId,
       );
@@ -75,12 +68,24 @@ export default function ClientProducts() {
     refetch: retry,
   } = useProducts();
 
+  const { data: categories = [] } = useCategories();
+
+  const searchParams = useSearchParams();
+  const categoryParam = searchParams.get('category');
+
   const [searchTerm, setSearchTerm] = useState("");
   const [filters, setFilters] = useState<FilterOptions>({
     sortBy: "default",
     stockFilter: "all",
-    categoryFilter: "all",
+    categoryFilter: categoryParam || "all",
   });
+
+  useEffect(() => {
+    setFilters((prev) => ({
+      ...prev,
+      categoryFilter: categoryParam || "all",
+    }));
+  }, [categoryParam]);
 
   // Process products with search, filters, and sorting
   //useMemo is used to memoize the function
@@ -92,12 +97,16 @@ export default function ClientProducts() {
 
     // Apply search filter
     if (searchTerm.trim() !== "") {
+      const lowerSearch = searchTerm.toLowerCase();
+      const matchingCategoryIds = categories
+        .filter((cat) => cat.name.toLowerCase().includes(lowerSearch))
+        .map((cat) => cat.id);
+
       processed = processed.filter(
         (product) =>
-          product.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          (product.description?.toLowerCase() || "").includes(
-            searchTerm.toLowerCase(),
-          ),
+          (product.title || '').toLowerCase().includes(lowerSearch) ||
+          (product.description?.toLowerCase() || "").includes(lowerSearch) ||
+          (product.category_id && matchingCategoryIds.includes(product.category_id))
       );
     }
 
@@ -108,7 +117,7 @@ export default function ClientProducts() {
     processed = sortProducts(processed, filters.sortBy);
 
     return processed;
-  }, [products, searchTerm, filters]);
+  }, [products, searchTerm, filters, categories]);
 
   return (
     <ErrorBoundary>
@@ -118,12 +127,12 @@ export default function ClientProducts() {
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5 }}
-          className="flex flex-col lg:flex-row gap-4 items-center justify-between bg-card rounded-xl border p-4 shadow-sm"
+          className="flex flex-col lg:flex-row gap-5 items-center justify-between bg-primary/5 rounded-2xl border border-primary/20 p-5 shadow-[0_8px_30px_rgb(0,0,0,0.04)] mb-8"
         >
           {/* Search Input */}
-          <div className="w-full lg:max-w-sm relative">
+          <div className="w-full lg:max-w-md relative">
             <svg
-              className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground"
+              className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400"
               xmlns="http://www.w3.org/2000/svg"
               width="24"
               height="24"
@@ -139,10 +148,10 @@ export default function ClientProducts() {
             </svg>
             <Input
               type="search"
-              placeholder="Search products..."
+              placeholder="Search for amazing products..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-9 rounded-full bg-muted/50 border-border/50 focus:bg-background"
+              className="w-full pl-11 h-12 rounded-xl bg-gray-50 border-gray-200 text-gray-800 focus:bg-white focus:ring-2 focus:ring-primary/20 transition-all text-sm shadow-sm"
             />
           </div>
 
@@ -156,7 +165,7 @@ export default function ClientProducts() {
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          className="bg-muted/50 flex flex-col items-center justify-between gap-4 rounded-lg p-4 sm:flex-row"
+          className="bg-primary/5 flex flex-col items-center justify-between gap-4 rounded-lg p-4 sm:flex-row"
         >
           <div className="text-muted-foreground flex items-center gap-2 text-sm">
             <span>

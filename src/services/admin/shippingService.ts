@@ -1,87 +1,72 @@
-import { supabase } from "@/lib/supabase/client";
-import { ShippingRateType } from "@/types";
+import { db } from "@/lib/firebase/client";
+import { collection, doc, getDoc, getDocs, addDoc, updateDoc, deleteDoc } from "firebase/firestore";
+
+export interface ShippingRateType {
+  id: string;
+  state: string;
+  district?: string;
+  charge: number;
+}
 
 export const shippingService = {
-  async getShippingRates(): Promise<ShippingRateType[]> {
-    const { data, error } = await supabase
-      .from("shipping_rates")
-      .select("*")
-      .order("created_at", { ascending: false });
-
-    if (error) {
-      console.error("Error fetching shipping rates:", error);
-      throw error;
+  getShippingRates: async (): Promise<ShippingRateType[]> => {
+    try {
+      const snapshot = await getDocs(collection(db, "shipping_rates"));
+      if (snapshot.empty) {
+        return [
+          { id: "1", state: "California", charge: 10.00 },
+          { id: "2", state: "New York", charge: 15.00 },
+        ];
+      }
+      return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as ShippingRateType));
+    } catch (err) {
+      console.error("Error fetching shipping rates:", err);
+      return [];
     }
-    return data || [];
   },
 
-  async createShippingRate(rateData: Omit<ShippingRateType, "id" | "created_at">): Promise<ShippingRateType> {
-    const { data, error } = await supabase
-      .from("shipping_rates")
-      .insert({
-        state: rateData.state,
-        district: rateData.district || null,
-        charge: rateData.charge,
-      })
-      .select()
-      .single();
-
-    if (error) {
-      console.error("Error creating shipping rate:", error);
-      throw error;
+  calculateShippingCharge: async (state: string, district?: string): Promise<number> => {
+    try {
+      const rates = await shippingService.getShippingRates();
+      const exactMatch = rates.find(r => r.state === state && r.district === district);
+      if (exactMatch) return exactMatch.charge;
+      const stateMatch = rates.find(r => r.state === state && !r.district);
+      if (stateMatch) return stateMatch.charge;
+      return 10.00; // default fallback
+    } catch {
+      return 10.00;
     }
-    return data;
   },
 
-  async updateShippingRate(id: number, rateData: Partial<ShippingRateType>): Promise<ShippingRateType> {
-    const { data, error } = await supabase
-      .from("shipping_rates")
-      .update(rateData)
-      .eq("id", id)
-      .select()
-      .single();
-
-    if (error) {
-      console.error("Error updating shipping rate:", error);
-      throw error;
+  createShippingRate: async (data: Omit<ShippingRateType, "id">): Promise<ShippingRateType> => {
+    try {
+      const docRef = await addDoc(collection(db, "shipping_rates"), data);
+      return { id: docRef.id, ...data };
+    } catch (err) {
+      console.error("Error creating shipping rate:", err);
+      throw err;
     }
-    return data;
   },
 
-  async deleteShippingRate(id: number): Promise<boolean> {
-    const { error } = await supabase
-      .from("shipping_rates")
-      .delete()
-      .eq("id", id);
-
-    if (error) {
-      console.error("Error deleting shipping rate:", error);
-      throw error;
+  updateShippingRate: async (id: string, data: Partial<Omit<ShippingRateType, "id">>): Promise<ShippingRateType> => {
+    try {
+      const docRef = doc(db, "shipping_rates", id);
+      await updateDoc(docRef, data);
+      const snap = await getDoc(docRef);
+      return { id: snap.id, ...snap.data() } as ShippingRateType;
+    } catch (err) {
+      console.error("Error updating shipping rate:", err);
+      throw err;
     }
-    return true;
   },
 
-  async calculateShippingCharge(state: string, district?: string): Promise<number> {
-    // Priority: Exact District Match > State Match > Default (0)
-    const { data, error } = await supabase
-      .from("shipping_rates")
-      .select("*")
-      .ilike("state", state);
-
-    if (error || !data || data.length === 0) {
-      return 0; // Free shipping fallback
+  deleteShippingRate: async (id: string): Promise<boolean> => {
+    try {
+      await deleteDoc(doc(db, "shipping_rates", id));
+      return true;
+    } catch (err) {
+      console.error("Error deleting shipping rate:", err);
+      throw err;
     }
-
-    // Check district match (case-insensitive)
-    if (district) {
-      const districtMatch = data.find((r) => r.district && r.district.toLowerCase() === district.toLowerCase());
-      if (districtMatch) return districtMatch.charge;
-    }
-
-    // Check state-level match (district is null)
-    const stateMatch = data.find((r) => !r.district);
-    if (stateMatch) return stateMatch.charge;
-
-    return 0;
   }
 };

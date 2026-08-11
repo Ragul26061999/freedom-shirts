@@ -1,55 +1,83 @@
-import { supabase } from '@/lib/supabase/client';
-import { ReviewType } from '../../types';
+import { db, auth } from '@/lib/firebase/client';
+import { collection, query, where, getDocs, doc, getDoc, addDoc, updateDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
+import { ReviewType, ProfileType } from '../../types';
 import { toast } from 'sonner';
-import { getClientUser } from '@/lib/supabase/clientUtils';
 
 export const reviewService = {
   async getReviewsByProduct(productId: string): Promise<ReviewType[]> {
     try {
-      const { data, error } = await supabase
-        .from('reviews')
-        .select('*, profile:profiles(*)')
-        .eq('product_id', productId)
-        .order('created_at', { ascending: false });
-
-      if (error) {
-        console.error('Error fetching reviews:', error);
-        console.error('Error details:', {
-          message: error.message,
-          details: error.details,
-          hint: error.hint,
-          code: error.code,
-        });
-        toast.error(error.message || 'Failed to fetch reviews');
-        return [];
-      }
-
-      return (data as ReviewType[]) || [];
-    } catch (error) {
-      console.error('Error in getReviewsByProduct:', error);
-      toast.error('Something went wrong');
+      const q = query(
+        collection(db, 'reviews'),
+        where('product_id', '==', productId)
+      );
+      
+      const snapshot = await getDocs(q);
+      const reviews = await Promise.all(snapshot.docs.map(async (docSnap) => {
+        const data = docSnap.data();
+        let profile: ProfileType | undefined = undefined;
+        
+        if (data.user_id) {
+          const profileDoc = await getDoc(doc(db, 'profiles', data.user_id));
+          if (profileDoc.exists()) {
+            const pd = profileDoc.data();
+            profile = {
+              profile_id: profileDoc.id,
+              ...pd
+            } as ProfileType;
+          }
+        }
+        
+        return {
+          id: docSnap.id,
+          ...data,
+          created_at: data.created_at?.toDate ? data.created_at.toDate().toISOString() : new Date().toISOString(),
+          profile
+        } as unknown as ReviewType;
+      }));
+      
+      // Sort in memory to avoid needing a Firestore composite index
+      reviews.sort((a, b) => {
+        const dateA = new Date(a.created_at || 0).getTime();
+        const dateB = new Date(b.created_at || 0).getTime();
+        return dateB - dateA;
+      });
+      
+      return reviews;
+    } catch (error: any) {
+      console.error('Error fetching reviews:', error);
+      toast.error(error.message || 'Failed to fetch reviews');
       return [];
     }
   },
 
-  async getReviewById(id: number): Promise<ReviewType | null> {
+  async getReviewById(id: number | string): Promise<ReviewType | null> {
     try {
-      const { data, error } = await supabase
-        .from('reviews')
-        .select('*, profile:profiles(*)')
-        .eq('id', id)
-        .single();
-
-      if (error) {
-        console.error('Error fetching review:', error);
-        toast.error('Failed to fetch review');
-        return null;
+      const docSnap = await getDoc(doc(db, 'reviews', String(id)));
+      if (!docSnap.exists()) return null;
+      
+      const data = docSnap.data();
+      let profile: ProfileType | undefined = undefined;
+        
+      if (data.user_id) {
+        const profileDoc = await getDoc(doc(db, 'profiles', data.user_id));
+        if (profileDoc.exists()) {
+          const pd = profileDoc.data();
+          profile = {
+            profile_id: profileDoc.id,
+            ...pd
+          } as ProfileType;
+        }
       }
-
-      return data as ReviewType;
+      
+      return {
+        id: docSnap.id,
+        ...data,
+        created_at: data.created_at?.toDate ? data.created_at.toDate().toISOString() : new Date().toISOString(),
+        profile
+      } as unknown as ReviewType;
     } catch (error) {
-      console.error('Error in getReviewById:', error);
-      toast.error('Something went wrong');
+      console.error('Error fetching review:', error);
+      toast.error('Failed to fetch review');
       return null;
     }
   },
@@ -60,106 +88,106 @@ export const reviewService = {
     comment: string
   ): Promise<ReviewType | null> {
     try {
-      const user = await getClientUser();
+      const user = auth.currentUser;
       if (!user) {
         toast.error('You must be logged in to leave a review');
         return null;
       }
-
-      const { data, error } = await supabase
-        .from('reviews')
-        .insert({
-          product_id: productId,
-          user_id: user.id,
-          rating,
-          comment,
-        })
-        .select('*')
-        .single();
-
-      if (error) {
-        console.error('Error creating review:', error);
-        console.error('Error details:', {
-          message: error.message,
-          details: error.details,
-          hint: error.hint,
-          code: error.code,
-        });
-        toast.error(error.message || 'Failed to create review');
-        return null;
+      
+      const newReview = {
+        product_id: productId,
+        user_id: user.uid,
+        rating,
+        comment,
+        created_at: serverTimestamp(),
+      };
+      
+      const docRef = await addDoc(collection(db, 'reviews'), newReview);
+      const docSnap = await getDoc(docRef);
+      const data = docSnap.data()!;
+      
+      let profile: ProfileType | undefined = undefined;
+      const profileDoc = await getDoc(doc(db, 'profiles', user.uid));
+      if (profileDoc.exists()) {
+         profile = { profile_id: profileDoc.id, ...profileDoc.data() } as ProfileType;
       }
 
-      return data as ReviewType;
-    } catch (error) {
-      console.error('Error in createReview:', error);
-      toast.error('Something went wrong');
+      return {
+        id: docSnap.id,
+        ...data,
+        created_at: new Date().toISOString(),
+        profile
+      } as unknown as ReviewType;
+    } catch (error: any) {
+      console.error('Error creating review:', error);
+      toast.error(error.message || 'Failed to create review');
       return null;
     }
   },
 
   async updateReview(
-    id: number,
+    id: number | string,
     rating: number,
     comment: string
   ): Promise<ReviewType | null> {
     try {
-      const user = await getClientUser();
+      const user = auth.currentUser;
       if (!user) {
         toast.error('You must be logged in to update a review');
         return null;
       }
-
-      const { data, error } = await supabase
-        .from('reviews')
-        .update({
-          rating,
-          comment,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', id)
-        .eq('user_id', user.id) // Ensure user owns the review
-        .select('*')
-        .single();
-
-      if (error) {
-        console.error('Error updating review:', error);
-        toast.error('Failed to update review');
+      
+      const reviewRef = doc(db, 'reviews', String(id));
+      const reviewSnap = await getDoc(reviewRef);
+      
+      if (!reviewSnap.exists() || reviewSnap.data()?.user_id !== user.uid) {
+        toast.error('Not authorized to update this review');
         return null;
       }
-
-      return data as ReviewType;
+      
+      await updateDoc(reviewRef, {
+        rating,
+        comment,
+        updated_at: serverTimestamp()
+      });
+      
+      const updatedSnap = await getDoc(reviewRef);
+      const data = updatedSnap.data()!;
+      
+      return {
+        id: updatedSnap.id,
+        ...data,
+        updated_at: new Date().toISOString()
+      } as unknown as ReviewType;
     } catch (error) {
-      console.error('Error in updateReview:', error);
+      console.error('Error updating review:', error);
       toast.error('Something went wrong');
       return null;
     }
   },
 
-  async deleteReview(id: number): Promise<boolean> {
+  async deleteReview(id: number | string): Promise<boolean> {
     try {
-      const user = await getClientUser();
+      const user = auth.currentUser;
       if (!user) {
         toast.error('You must be logged in to delete a review');
         return false;
       }
-
-      const { error } = await supabase
-        .from('reviews')
-        .delete()
-        .eq('id', id)
-        .eq('user_id', user.id); // Ensure user owns the review
-
-      if (error) {
-        console.error('Error deleting review:', error);
-        toast.error('Failed to delete review');
+      
+      const reviewRef = doc(db, 'reviews', String(id));
+      const reviewSnap = await getDoc(reviewRef);
+      
+      if (!reviewSnap.exists() || reviewSnap.data()?.user_id !== user.uid) {
+        toast.error('Not authorized to delete this review');
         return false;
       }
-
+      
+      await deleteDoc(reviewRef);
       return true;
     } catch (error) {
-      console.error('Error in deleteReview:', error);
+      console.error('Error deleting review:', error);
       toast.error('Something went wrong');
       return false;
     }
-  },
+  }
 };

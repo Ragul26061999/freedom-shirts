@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,6 +14,7 @@ import {
   Package,
   AlertTriangle,
   Eye,
+  RefreshCw,
 } from "lucide-react";
 import {
   adminProductService,
@@ -28,32 +29,76 @@ import Link from "next/link";
 import { ProductFormModal } from "@/components/admin/ProductFormModal";
 import { DeleteConfirmModal } from "@/components/admin/DeleteConfirmModal";
 
+// Auto-refresh interval: 15 seconds to keep stock counts current
+const AUTO_REFRESH_INTERVAL = 15_000;
+
 export default function AdminProductsPage() {
   const [products, setProducts] = useState<ProductWithDetails[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [editingProduct, setEditingProduct] =
     useState<ProductWithDetails | null>(null);
   const [deletingProduct, setDeletingProduct] =
     useState<ProductWithDetails | null>(null);
+  const prevStockRef = useRef<Record<string, number>>({});
 
-  useEffect(() => {
-    fetchProducts();
-  }, []);
-
-  const fetchProducts = async () => {
+  const fetchProducts = useCallback(async (silent = false) => {
     try {
-      setLoading(true);
+      if (!silent) setLoading(true);
+      else setIsRefreshing(true);
+
       const data = await adminProductService.getAllProducts();
+
+      // Detect stock changes on silent refresh and notify admin
+      if (silent && prevStockRef.current) {
+        for (const product of data) {
+          const prevStock = prevStockRef.current[product.product_id];
+          if (prevStock !== undefined && prevStock !== product.stock) {
+            const diff = prevStock - product.stock;
+            if (diff > 0) {
+              toast.info(
+                `📦 Stock updated: "${product.title}" reduced by ${diff} (${prevStock} → ${product.stock})`,
+                { duration: 5000 }
+              );
+            }
+          }
+        }
+      }
+
+      // Store current stock for future comparison
+      const stockMap: Record<string, number> = {};
+      for (const product of data) {
+        stockMap[product.product_id] = product.stock;
+      }
+      prevStockRef.current = stockMap;
+
       setProducts(data);
+      setLastUpdated(new Date());
     } catch (error) {
       console.error("Error fetching products:", error);
-      toast.error("Failed to load products");
+      if (!silent) toast.error("Failed to load products");
     } finally {
       setLoading(false);
+      setIsRefreshing(false);
     }
-  };
+  }, []);
+
+  // Initial load
+  useEffect(() => {
+    fetchProducts();
+  }, [fetchProducts]);
+
+  // Auto-refresh polling every 15 seconds for real-time stock updates
+  useEffect(() => {
+    const intervalId = setInterval(() => {
+      fetchProducts(true); // silent refresh
+    }, AUTO_REFRESH_INTERVAL);
+
+    return () => clearInterval(intervalId);
+  }, [fetchProducts]);
 
   const handleCreateProduct = async (productData: CreateProductData) => {
     try {
@@ -96,9 +141,9 @@ export default function AdminProductsPage() {
 
   const filteredProducts = products.filter(
     (product) =>
-      product.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      product.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      product.sku?.toLowerCase().includes(searchTerm.toLowerCase()),
+      (product.title?.toLowerCase() || "").includes(searchTerm.toLowerCase()) ||
+      (product.description?.toLowerCase() || "").includes(searchTerm.toLowerCase()) ||
+      (product.sku?.toLowerCase() || "").includes(searchTerm.toLowerCase()),
   );
 
   if (loading) {
@@ -118,15 +163,35 @@ export default function AdminProductsPage() {
           <h1 className="text-3xl font-bold tracking-tight">
             Product Management
           </h1>
-          <p className="text-muted-foreground">Manage your product catalog</p>
+          <div className="flex items-center gap-3 mt-1">
+            <p className="text-muted-foreground">Manage your product catalog</p>
+            {lastUpdated && (
+              <span className="text-xs text-muted-foreground/70 flex items-center gap-1">
+                <span className="inline-block w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
+                Auto-refreshing · Last updated: {lastUpdated.toLocaleTimeString()}
+              </span>
+            )}
+          </div>
         </div>
-        <Button
-          onClick={() => setShowCreateModal(true)}
-          className="cursor-pointer transition-transform hover:scale-105"
-        >
-          <Plus className="mr-2 h-4 w-4" />
-          Add Product
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => fetchProducts(true)}
+            disabled={isRefreshing}
+            className="cursor-pointer transition-transform hover:scale-105"
+          >
+            <RefreshCw className={`mr-2 h-4 w-4 ${isRefreshing ? "animate-spin" : ""}`} />
+            {isRefreshing ? "Refreshing..." : "Refresh Stock"}
+          </Button>
+          <Button
+            onClick={() => setShowCreateModal(true)}
+            className="cursor-pointer transition-transform hover:scale-105"
+          >
+            <Plus className="mr-2 h-4 w-4" />
+            Add Product
+          </Button>
+        </div>
       </div>
 
       {/* Search and Filters */}

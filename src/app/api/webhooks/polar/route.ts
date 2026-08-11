@@ -303,20 +303,22 @@ export async function POST(request: NextRequest) {
 			await supabase.from('cart_items').delete().eq('cart_id', cart.id)
 		}
 
-		// Reduce stock for each product
+		// Get Admin client to bypass RLS for stock update
+		const { createClient } = require('@supabase/supabase-js');
+		const supabaseAdmin = createClient(
+			process.env.NEXT_PUBLIC_SUPABASE_URL!,
+			process.env.SUPABASE_SERVICE_ROLE_KEY!
+		);
+
+		// Reduce stock for each product using FIFO
 		for (const item of orderItems) {
-			const { data: productData } = await supabase
-				.from('products')
-				.select('stock')
-				.eq('product_id', item.product_id)
-				.single()
-				
-			if (productData && productData.stock !== undefined) {
-				const newStock = Math.max(0, productData.stock - item.quantity)
-				await supabase
-					.from('products')
-					.update({ stock: newStock })
-					.eq('product_id', item.product_id)
+			const { error: stockError } = await supabaseAdmin.rpc('process_fifo_sale', {
+				p_product_id: item.product_id,
+				p_quantity: item.quantity,
+				p_reason: `Customer order: ${checkout.id}`
+			});
+			if (stockError) {
+				console.error('Error reducing stock in Polar webhook:', stockError);
 			}
 		}
 

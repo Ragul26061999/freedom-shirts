@@ -1,4 +1,5 @@
-import { supabase } from "@/lib/supabase/client";
+import { db } from "@/lib/firebase/client";
+import { collection, doc, getDoc, getDocs, addDoc, updateDoc, deleteDoc, query, where, serverTimestamp, setDoc } from "firebase/firestore";
 import { ProductType } from "@/types";
 
 export interface CreateProductData {
@@ -12,6 +13,16 @@ export interface CreateProductData {
   stock: number;
   sku?: string | null;
   category_id?: number | null;
+  manufacturing_date?: string | null;
+  expiry_date?: string | null;
+  variants?: {
+    color: string;
+    images: string[];
+    sizes: {
+      size: string;
+      stock: number;
+    }[];
+  }[];
 }
 
 export interface UpdateProductData extends Partial<CreateProductData> {
@@ -27,195 +38,148 @@ export interface ProductWithDetails extends ProductType {
   average_rating?: number;
 }
 
-/**
- * Admin service for product management
- * Requires admin privileges for all operations
- */
+// Helper for dates
+const serializeDate = (val: any) => val && typeof val.toDate === 'function' ? val.toDate().toISOString() : val;
+
 export const adminProductService = {
-  /**
-   * Get all products with additional details for admin view
-   */
   async getAllProducts(): Promise<ProductWithDetails[]> {
     try {
-      const { data, error } = await supabase
-        .from("products")
-        .select(
-          `
-					*,
-					categories!products_category_id_fkey (
-						id,
-						name
-					)
-				`,
-        )
-        .order("created_at", { ascending: false });
+      const snapshot = await getDocs(collection(db, "products"));
+      
+      const products = await Promise.all(snapshot.docs.map(async (docSnap) => {
+        const data = docSnap.data();
+        let category = null;
 
-      if (error) {
-        console.error("Error fetching all products:", error);
-        throw error;
-      }
+        if (data.category_id) {
+          const catDoc = await getDoc(doc(db, "categories", String(data.category_id)));
+          if (catDoc.exists()) {
+            category = {
+              id: Number(catDoc.id),
+              name: catDoc.data().name
+            };
+          }
+        }
 
-      // Get review statistics for each product
-      const productsWithStats = await Promise.all(
-        (data || []).map(async (product) => {
-          const { data: reviewStats } = await supabase
-            .from("reviews")
-            .select("rating")
-            .eq("product_id", product.product_id);
+        // Mock reviews for now since we don't have reviews migrated
+        const total_reviews = 0;
+        const average_rating = 0;
 
-          const reviews = reviewStats || [];
-          const totalReviews = reviews.length;
-          const averageRating =
-            totalReviews > 0
-              ? reviews.reduce((sum, review) => sum + review.rating, 0) /
-                totalReviews
-              : 0;
+        return {
+          product_id: docSnap.id,
+          ...data,
+          created_at: serializeDate(data.created_at),
+          updated_at: serializeDate(data.updated_at),
+          expiry_date: serializeDate(data.expiry_date),
+          manufacturing_date: serializeDate(data.manufacturing_date),
+          category,
+          total_reviews,
+          average_rating
+        } as unknown as ProductWithDetails;
+      }));
 
-          return {
-            ...product,
-            category: product.categories,
-            total_reviews: totalReviews,
-            average_rating: Number(averageRating.toFixed(1)),
-          };
-        }),
-      );
-
-      return productsWithStats;
+      return products.sort((a, b) => {
+        if (!a.created_at || !b.created_at) return 0;
+        return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+      });
     } catch (err) {
       console.error("Failed to get all products:", err);
-      throw err;
+      return [];
     }
   },
 
-  /**
-   * Create a new category
-   */
   async createCategory(categoryData: { name: string; description?: string }): Promise<{ id: number; name: string }> {
     try {
-      const { data, error } = await supabase
-        .from("categories")
-        .insert({
-          name: categoryData.name,
-          description: categoryData.description || "",
-        })
-        .select("id, name")
-        .single();
+      // Use timestamp for sequential id
+      const idStr = String(Date.now());
+      
+      await setDoc(doc(db, "categories", idStr), {
+        name: categoryData.name,
+        description: categoryData.description || "",
+        created_at: serverTimestamp(),
+        updated_at: serverTimestamp()
+      });
 
-      if (error) {
-        console.error("Error creating category:", error);
-        throw error;
-      }
-
-      return data;
+      return { id: Number(idStr), name: categoryData.name };
     } catch (err) {
       console.error("Failed to create category:", err);
       throw err;
     }
   },
 
-  /**
-   * Upload product image to Supabase Storage
-   */
   async uploadProductImage(file: File): Promise<string | null> {
     try {
-      const fileExt = file.name.split('.').pop();
-      const fileName = `product_${Math.random().toString(36).substring(2, 15)}.${fileExt}`;
-      const filePath = `${fileName}`;
-      const bucketName = 'images';
+      // Re-create the File object to ensure it hasn't been corrupted or proxied by React state
+      // which can cause Next.js fetch to fail to set the multipart boundary correctly.
+      const safeFile = new File([file], file.name || 'upload.jpg', { type: file.type || 'image/jpeg' });
+      
+      const formData = new FormData();
+      formData.append('image', safeFile);
+      
+      const response = await fetch('/api/admin/upload-image', {
+        method: 'POST',
+        body: formData,
+      });
 
-      const { data, error } = await supabase.storage
-        .from(bucketName)
-        .upload(filePath, file, { cacheControl: '3600', upsert: true });
-
-      if (error) {
-        console.error('Failed to upload image. Storage bucket may not be configured:', error);
-        throw new Error(`Storage upload failed: ${error.message}`);
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        throw new Error(errData.error || 'Failed to upload image');
       }
 
-      const uploadedPath = data?.path || filePath;
-      const { data: publicUrlData } = supabase.storage
-        .from(bucketName)
-        .getPublicUrl(uploadedPath);
-
-      return publicUrlData?.publicUrl || null;
+      const data = await response.json();
+      return data.url || null;
     } catch (error) {
       console.error('Error uploading product image:', error);
-      return null;
+      throw error;
     }
   },
 
-  /**
-   * Create a new product
-   */
   async createProduct(productData: CreateProductData): Promise<ProductType> {
     try {
-      const { data, error } = await supabase
-        .from("products")
-        .insert({
-          ...productData,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        })
-        .select()
-        .single();
+      const docRef = await addDoc(collection(db, "products"), {
+        ...productData,
+        created_at: serverTimestamp(),
+        updated_at: serverTimestamp(),
+      });
 
-      if (error) {
-        console.error("Error creating product:", JSON.stringify(error, null, 2));
-        throw error;
-      }
-
-      return data;
+      const docSnap = await getDoc(docRef);
+      const data = docSnap.data()!;
+      return {
+        product_id: docSnap.id,
+        ...data,
+        created_at: serializeDate(data.created_at),
+        updated_at: serializeDate(data.updated_at),
+      } as unknown as ProductType;
     } catch (err) {
       console.error("Failed to create product:", err);
       throw err;
     }
   },
 
-  /**
-   * Update an existing product
-   */
-  async updateProduct(
-    productId: string,
-    productData: UpdateProductData,
-  ): Promise<ProductType> {
+  async updateProduct(productId: string, productData: UpdateProductData): Promise<ProductType> {
     try {
-      const { data, error } = await supabase
-        .from("products")
-        .update({
-          ...productData,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("product_id", productId)
-        .select()
-        .single();
+      const docRef = doc(db, "products", productId);
+      await updateDoc(docRef, {
+        ...productData,
+        updated_at: serverTimestamp(),
+      });
 
-      if (error) {
-        console.error("Error updating product:", JSON.stringify(error, null, 2));
-        throw error;
-      }
-
-      return data;
+      const docSnap = await getDoc(docRef);
+      const data = docSnap.data()!;
+      return {
+        product_id: docSnap.id,
+        ...data,
+        created_at: serializeDate(data.created_at),
+        updated_at: serializeDate(data.updated_at),
+      } as unknown as ProductType;
     } catch (err) {
       console.error("Failed to update product:", err);
       throw err;
     }
   },
 
-  /**
-   * Delete a product
-   */
   async deleteProduct(productId: string): Promise<boolean> {
     try {
-      const { error } = await supabase
-        .from("products")
-        .delete()
-        .eq("product_id", productId);
-
-      if (error) {
-        console.error("Error deleting product:", JSON.stringify(error, null, 2));
-        throw error;
-      }
-
+      await deleteDoc(doc(db, "products", productId));
       return true;
     } catch (err) {
       console.error("Failed to delete product:", err);
@@ -223,110 +187,75 @@ export const adminProductService = {
     }
   },
 
-  /**
-   * Update product stock
-   */
   async updateStock(productId: string, newStock: number): Promise<ProductType> {
     try {
-      const { data, error } = await supabase
-        .from("products")
-        .update({
-          stock: newStock,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("product_id", productId)
-        .select()
-        .single();
+      const docRef = doc(db, "products", productId);
+      await updateDoc(docRef, {
+        stock: newStock,
+        updated_at: serverTimestamp(),
+      });
 
-      if (error) {
-        console.error("Error updating product stock:", JSON.stringify(error, null, 2));
-        throw error;
-      }
-
-      return data;
+      const docSnap = await getDoc(docRef);
+      const data = docSnap.data()!;
+      return {
+        product_id: docSnap.id,
+        ...data,
+      } as unknown as ProductType;
     } catch (err) {
       console.error("Failed to update product stock:", err);
       throw err;
     }
   },
 
-  /**
-   * Get products with low stock (below threshold)
-   */
   async getLowStockProducts(threshold: number = 10): Promise<ProductType[]> {
     try {
-      const { data, error } = await supabase
-        .from("products")
-        .select("*")
-        .lt("stock", threshold)
-        .order("stock", { ascending: true });
-
-      if (error) {
-        console.error("Error fetching low stock products:", error);
-        throw error;
-      }
-
-      return data || [];
+      const q = query(collection(db, "products"), where("stock", "<", threshold));
+      const snapshot = await getDocs(q);
+      
+      return snapshot.docs.map(docSnap => {
+        const data = docSnap.data();
+        return {
+          product_id: docSnap.id,
+          ...data,
+          created_at: serializeDate(data.created_at),
+          updated_at: serializeDate(data.updated_at),
+        } as unknown as ProductType;
+      });
     } catch (err) {
       console.error("Failed to get low stock products:", err);
       return [];
     }
   },
 
-  /**
-   * Get product analytics data
-   */
   async getProductAnalytics() {
     try {
-      // Get total products count
-      const { count: totalProducts } = await supabase
-        .from("products")
-        .select("*", { count: "exact", head: true });
+      const snapshot = await getDocs(collection(db, "products"));
+      
+      const totalProducts = snapshot.docs.length;
+      let lowStockCount = 0;
+      let totalInventoryValue = 0;
+      const categoryStats: Record<string, number> = {};
 
-      // Get products by category
-      const { data: categoryCounts } = await supabase.from("products").select(`
-					category_id,
-					categories!products_category_id_fkey (
-						name
-					)
-				`);
+      for (const docSnap of snapshot.docs) {
+        const data = docSnap.data();
+        
+        if (data.stock < 10) lowStockCount++;
+        totalInventoryValue += (data.price || 0) * (data.stock || 0);
 
-      // Count products by category
-      const categoryStats = (categoryCounts || []).reduce<
-        Record<string, number>
-      >((acc, product) => {
-        const categoryName = (() => {
-          const cat = (product as { categories?: unknown }).categories;
-          if (Array.isArray(cat)) {
-            return (cat[0] as { name?: string }).name ?? "Uncategorized";
+        let categoryName = "Uncategorized";
+        if (data.category_id) {
+          const catDoc = await getDoc(doc(db, "categories", String(data.category_id)));
+          if (catDoc.exists()) {
+            categoryName = catDoc.data().name;
           }
-          return (cat as { name?: string } | null)?.name ?? "Uncategorized";
-        })();
-
-        acc[categoryName] = (acc[categoryName] || 0) + 1;
-        return acc;
-      }, {});
-
-      // Get low stock count
-      const { count: lowStockCount } = await supabase
-        .from("products")
-        .select("*", { count: "exact", head: true })
-        .lt("stock", 10);
-
-      // Get total inventory value
-      const { data: products } = await supabase
-        .from("products")
-        .select("price, stock");
-
-      const totalInventoryValue = (products || []).reduce(
-        (sum, product) => sum + product.price * product.stock,
-        0,
-      );
+        }
+        categoryStats[categoryName] = (categoryStats[categoryName] || 0) + 1;
+      }
 
       return {
-        totalProducts: totalProducts || 0,
+        totalProducts,
         categoryStats,
-        lowStockCount: lowStockCount || 0,
+        lowStockCount,
         totalInventoryValue: Number(totalInventoryValue.toFixed(2)),
       };
     } catch (err) {
@@ -340,17 +269,11 @@ export const adminProductService = {
     }
   },
 
-  /**
-   * Bulk update products
-   */
-  async bulkUpdateProducts(
-    updates: Array<{ productId: string; data: UpdateProductData }>,
-  ): Promise<boolean> {
+  async bulkUpdateProducts(updates: Array<{ productId: string; data: UpdateProductData }>): Promise<boolean> {
     try {
       const promises = updates.map(({ productId, data }) =>
         this.updateProduct(productId, data),
       );
-
       await Promise.all(promises);
       return true;
     } catch (err) {

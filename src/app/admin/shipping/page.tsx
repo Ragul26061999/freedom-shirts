@@ -21,8 +21,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Plus, Trash2, Edit } from "lucide-react";
-import { shippingService } from "@/services/admin/shippingService";
-import { ShippingRateType } from "@/types";
+import { shippingService, ShippingRateType } from "@/services/admin/shippingService";
 import { LoadingSpinner } from "@/components/LoadingSpinner";
 import {
   Dialog,
@@ -117,7 +116,7 @@ export default function ShippingManagementPage() {
     }
   };
 
-  const handleDelete = async (id: number) => {
+  const handleDelete = async (id: string) => {
     if (!window.confirm("Are you sure you want to delete this shipping rate?")) return;
     try {
       await shippingService.deleteShippingRate(id);
@@ -176,7 +175,7 @@ export default function ShippingManagementPage() {
                       <TableCell>
                         {rate.district ? rate.district : <span className="text-muted-foreground italic">All Districts</span>}
                       </TableCell>
-                      <TableCell className="text-right">₹{rate.charge.toFixed(2)}</TableCell>
+                      <TableCell className="text-right">₹{(rate.charge || 0).toFixed(2)}</TableCell>
                       <TableCell className="text-right">
                         <Button
                           variant="ghost"

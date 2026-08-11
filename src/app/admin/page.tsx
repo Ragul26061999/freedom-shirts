@@ -17,6 +17,9 @@ import {
   IndianRupee,
   Activity,
   Settings,
+  Archive,
+  Truck,
+  RotateCcw,
 } from "lucide-react";
 import { adminProductService } from "@/services/admin/adminProductService";
 import { adminOrderService } from "@/services/admin/adminOrderService";
@@ -221,23 +224,41 @@ export default function AdminDashboard() {
           <CardTitle>Quick Actions</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+          <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-6">
             <Link href="/admin/products">
               <Button className="w-full cursor-pointer" variant="outline">
                 <Package className="mr-2 h-4 w-4" />
-                Manage Products
+                Products
               </Button>
             </Link>
             <Link href="/admin/orders">
               <Button className="w-full cursor-pointer" variant="outline">
                 <ShoppingCart className="mr-2 h-4 w-4" />
-                Manage Orders
+                Orders
               </Button>
             </Link>
             <Link href="/admin/users">
               <Button className="w-full cursor-pointer" variant="outline">
                 <Users className="mr-2 h-4 w-4" />
-                Manage Users
+                Users
+              </Button>
+            </Link>
+            <Link href="/admin/inventory">
+              <Button className="w-full cursor-pointer bg-primary text-primary-foreground hover:bg-primary/90" variant="outline">
+                <Archive className="mr-2 h-4 w-4" />
+                Inventory
+              </Button>
+            </Link>
+            <Link href="/admin/purchases">
+              <Button className="w-full cursor-pointer bg-primary text-primary-foreground hover:bg-primary/90" variant="outline">
+                <Truck className="mr-2 h-4 w-4" />
+                Purchases
+              </Button>
+            </Link>
+            <Link href="/admin/returns">
+              <Button className="w-full cursor-pointer bg-primary text-primary-foreground hover:bg-primary/90" variant="outline">
+                <RotateCcw className="mr-2 h-4 w-4" />
+                Returns
               </Button>
             </Link>
           </div>

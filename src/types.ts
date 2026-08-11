@@ -1,3 +1,14 @@
+export interface ProductSizeVariant {
+  size: string;
+  stock: number;
+}
+
+export interface ProductColorVariant {
+  color: string;
+  images: string[];
+  sizes: ProductSizeVariant[];
+}
+
 export interface ProductType {
   product_id: string;
   title: string;
@@ -6,12 +17,15 @@ export interface ProductType {
   discount_price?: number;
   offer_start_date?: string;
   offer_end_date?: string;
-  image?: string;
+  image?: string; // Kept for backwards compatibility / main thumbnail
   stock: number;
   sku?: string;
   category_id?: number;
+  manufacturing_date?: string;
+  expiry_date?: string;
   created_at?: string;
   updated_at?: string;
+  variants?: ProductColorVariant[];
 }
 
 export interface CartItemType {
@@ -23,6 +37,8 @@ export interface CartItemType {
   created_at: string;
   updated_at: string;
   product?: ProductType;
+  selectedColor?: string;
+  selectedSize?: string;
 }
 
 export type CartStatus = "active" | "abandoned" | "converted";
@@ -44,6 +60,8 @@ export interface OrderItemType {
   quantity: number;
   price: number;
   product_id: string;
+  selectedColor?: string;
+  selectedSize?: string;
   product?: {
     product_id: string;
     title: string;
@@ -68,6 +86,7 @@ export interface OrderType {
   payment_id?: string;
   created_at?: string;
   updated_at?: string;
+  cancellation_reason?: string;
   order_items?: OrderItemType[];
 }
 
@@ -99,6 +118,7 @@ export interface ReviewType {
   rating: number;
   comment?: string;
   created_at?: string;
+  profile?: ProfileType;
 }
 
 export interface CategoryType {

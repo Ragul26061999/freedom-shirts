@@ -7,14 +7,15 @@ import {
   useEffect,
 } from 'react';
 import { ProductType } from '../types';
-import * as cartService from '@/services/cart/cartService';
+import * as cartService from '../services/cart/cartService';
 import { toast } from 'sonner';
 import { useAuth } from './AuthContext';
 
-// Define CartItem interface extending ProductType with quantity for UI consumption
 export interface CartItem extends ProductType {
   quantity: number;
-  cart_item_id?: string; // Database ID for the cart item
+  cart_item_id?: string;
+  selectedColor?: string;
+  selectedSize?: string;
 }
 
 interface CartContextType {
@@ -61,11 +62,13 @@ export function CartProvider({ children }: { children: ReactNode }) {
           // Get cart items
           const items = await cartService.getCartItems(cart.id);
 
-          // Transform to CartItem format
           const formattedItems: CartItem[] = items.map((item) => ({
-            ...item.product,
+            ...(item.product as any),
+            product_id: item.product_id, // Ensure product_id is explicitly set
             quantity: item.quantity,
             cart_item_id: item.id,
+            selectedColor: item.selectedColor,
+            selectedSize: item.selectedSize,
           }));
 
           setCartItems(formattedItems);
@@ -117,18 +120,26 @@ export function CartProvider({ children }: { children: ReactNode }) {
     }
 
     try {
-      // Add item to database
+      // Add item to database (ProductType might have these temporarily attached from UI)
+      const selectedColor = (product as any).selectedColor;
+      const selectedSize = (product as any).selectedSize;
+
       const result = await cartService.addItemToCart(
         activeCartId as string,
         product.product_id,
         product.price,
-        1
+        1,
+        selectedColor,
+        selectedSize
       );
 
       if (result) {
-        // Find the item in current cart items
+        // Find the item in current cart items (must match variants)
         const existingItemIndex = cartItems.findIndex(
-          (item) => item.product_id === product.product_id
+          (item) => 
+            item.product_id === product.product_id &&
+            item.selectedColor === selectedColor &&
+            item.selectedSize === selectedSize
         );
 
         if (existingItemIndex !== -1) {
@@ -144,7 +155,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
           // Add new item
           setCartItems([
             ...cartItems,
-            { ...product, quantity: 1, cart_item_id: result.id },
+            { ...product, quantity: 1, cart_item_id: result.id, selectedColor, selectedSize },
           ]);
         }
 

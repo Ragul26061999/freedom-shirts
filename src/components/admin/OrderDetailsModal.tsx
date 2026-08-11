@@ -145,6 +145,20 @@ export function OrderDetailsModal({
               </div>
             </div>
 
+            {order.status === "cancelled" && order.cancellation_reason && (
+              <>
+                <Separator />
+                <div className="bg-rose-50 p-4 rounded-lg border border-rose-100">
+                  <h3 className="mb-2 text-lg font-semibold text-rose-800">
+                    Cancellation Reason
+                  </h3>
+                  <p className="text-sm text-rose-700">
+                    {order.cancellation_reason}
+                  </p>
+                </div>
+              </>
+            )}
+
             <Separator />
 
             {/* Shipping Address */}

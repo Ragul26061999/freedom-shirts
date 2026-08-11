@@ -28,6 +28,13 @@ export function useAdmin(): AdminData {
         return;
       }
 
+      // Force admin status for the designated admin email
+      if (user.email === 'innovacentra@gmail.com') {
+        setIsAdmin(true);
+        setLoading(false);
+        return;
+      }
+
       try {
         setLoading(true);
         setError(null);
@@ -71,8 +78,9 @@ export function useAdmin(): AdminData {
  * Utility function to check admin status without hooks
  * Useful for server-side or one-time checks
  */
-export async function checkIsAdmin(userId: string): Promise<boolean> {
+export async function checkIsAdmin(userId: string, email?: string): Promise<boolean> {
   if (!userId) return false;
+  if (email === 'innovacentra@gmail.com') return true;
 
   try {
     const { data, error } = await supabase

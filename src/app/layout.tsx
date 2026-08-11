@@ -6,21 +6,22 @@ import "./globals.css";
 import { ThemeProvider } from "@/components/theme-provider";
 import { Navbar } from "@/components/Navbar";
 import { Footer } from "@/components/Footer";
+import { MainLayout } from "@/components/MainLayout";
 import { TanStackQueryProvider } from "@/lib/providers/query-provider";
 import { Toaster } from "sonner";
-import { MainLayout } from "@/components/MainLayout";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
-import { Inter } from "next/font/google";
+import { Inter, Playfair_Display } from "next/font/google";
 import { cn } from "@/lib/utils";
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-sans" });
+const playfair = Playfair_Display({ subsets: ["latin"], variable: "--font-heading" });
 
 export const metadata: Metadata = {
   title: {
-    default: "Innova e-Commerce – Discover Your Style",
-    template: "%s | Innova e-Commerce",
+    default: "FSC – Freedom Shirt Company | Premium Shirts & Tailoring",
+    template: "%s | FSC – Freedom Shirt Company",
   },
-  description: "Premium quality fashion for modern lifestyles. Shop women, men, kids, shoes, bags, accessories and more.",
+  description: "Crafted with precision. Premium quality shirts, custom tailoring, and timeless fashion for the modern gentleman.",
 };
 
 export default function RootLayout({
@@ -29,11 +30,11 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" suppressHydrationWarning className={cn("font-sans", inter.variable)}>
+    <html lang="en" suppressHydrationWarning className={cn("font-sans", inter.variable, playfair.variable)}>
       <head>
         <link rel="icon" type="image/svg+xml" href="/icon.svg" />
-        <title>My App</title>
-        <meta name="description" content="My App is a..." />
+        <title>FSC – Freedom Shirt Company</title>
+        <meta name="description" content="Crafted with precision. Premium quality shirts, custom tailoring, and timeless fashion for the modern gentleman." />
       </head>
       <body className="bg-background min-h-screen flex flex-col">
         <ErrorBoundary>
@@ -57,6 +58,7 @@ export default function RootLayout({
           </TanStackQueryProvider>
         </ErrorBoundary>
         <Toaster
+          position="top-center"
           theme="light" // or "dark" or "system"
           toastOptions={{
             unstyled: false,

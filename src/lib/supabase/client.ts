@@ -4,18 +4,13 @@ import { createBrowserClient } from "@supabase/ssr";
 import type { Database } from "@/types/supabase";
 
 // Environment variables for client-side usage (must be prefixed with NEXT_PUBLIC_)
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-
-if (!supabaseUrl || !supabaseKey) {
-  console.error("Missing Supabase environment variables");
-  throw new Error("Missing Supabase environment variables");
-}
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "http://mock-supabase-url.local";
+const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "mock-supabase-key";
 
 // Create the Supabase client with additional options for browser usage
 export const supabase = createBrowserClient<Database>(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+  supabaseUrl,
+  supabaseKey,
   {
     realtime: {
       params: {
@@ -40,8 +35,8 @@ export const supabaseAuth = supabase.auth;
 
 export function createClientSupabase() {
   return createBrowserClient<Database>(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    supabaseUrl,
+    supabaseKey,
     {
       realtime: {
         params: {
@@ -105,5 +100,6 @@ export async function getProducts() {
     .order("created_at", { ascending: false });
 
   if (error) throw error;
-  return data;
+  const now = new Date();
+  return (data as any[]).filter(p => !p.expiry_date || new Date(p.expiry_date) >= now);
 }

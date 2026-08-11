@@ -8,7 +8,7 @@ import { useState, useMemo } from 'react'
 export interface FilterOptions {
   sortBy: 'price-asc' | 'price-desc' | 'name-asc' | 'name-desc' | 'default';
   stockFilter: 'all' | 'in-stock' | 'out-of-stock';
-  categoryFilter: 'all' | 'electronics' | 'clothing' | 'accessories';
+  categoryFilter: string;
 }
 
 // Query Keys - Following TanStack Query key factory pattern
@@ -19,7 +19,7 @@ export const productKeys = {
     [...productKeys.lists(), filters] as const,
   details: () => [...productKeys.all, 'detail'] as const,
   detail: (id: string) => [...productKeys.details(), id] as const,
-  category: (categoryId: number) =>
+  category: (categoryId: number | string) =>
     [...productKeys.lists(), { categoryId }] as const,
   filtered: (filters: FilterOptions, searchTerm: string) =>
     [...productKeys.lists(), { filters, searchTerm }] as const,
@@ -48,9 +48,9 @@ const sortProducts = (
     case 'price-desc':
       return sorted.sort((a, b) => b.price - a.price);
     case 'name-asc':
-      return sorted.sort((a, b) => a.title.localeCompare(b.title));
+      return sorted.sort((a, b) => (a.title || '').localeCompare(b.title || ''));
     case 'name-desc':
-      return sorted.sort((a, b) => b.title.localeCompare(a.title));
+      return sorted.sort((a, b) => (b.title || '').localeCompare(a.title || ''));
     default:
       return sorted;
   }
@@ -107,8 +107,8 @@ export function useProducts(options?: UseQueryOptions<ProductType[]>) {
       // Ensure we always return an array
       return Array.isArray(data) ? data : []
     },
-    staleTime: 5 * 60 * 1000, // 5 minutes
-    gcTime: 10 * 60 * 1000, // 10 minutes (formerly cacheTime)
+    staleTime: 30 * 1000, // 30 seconds - keeps stock counts fresh after purchases
+    gcTime: 2 * 60 * 1000, // 2 minutes garbage collection
     retry: (failureCount, error) => {
       if (
         error instanceof Error &&
@@ -138,7 +138,7 @@ export function useProducts(options?: UseQueryOptions<ProductType[]>) {
     if (searchTerm.trim() !== '') {
       processed = processed.filter(
         (product) =>
-          product.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          (product.title || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
           (product.description?.toLowerCase() || '').includes(
             searchTerm.toLowerCase()
           )
@@ -214,7 +214,7 @@ export function useProduct(
 
 // Get products by category with enhanced error handling
 export function useProductsByCategory(
-  categoryId: number,
+  categoryId: number | string,
   options?: UseQueryOptions<ProductType[]>
 ) {
   return useQuery({
@@ -223,7 +223,7 @@ export function useProductsByCategory(
       const data = await productService.getProductsByCategory(categoryId);
       return Array.isArray(data) ? data : [];
     },
-    enabled: !!categoryId && categoryId > 0, // Only fetch when valid categoryId
+    enabled: !!categoryId && (typeof categoryId === 'string' || categoryId > 0), // Only fetch when valid categoryId
     staleTime: 5 * 60 * 1000, // 5 minutes
     retry: (failureCount, error) => {
       if (
@@ -263,8 +263,8 @@ export function useFilteredProducts(
       const data = await productService.getProducts()
       return Array.isArray(data) ? data : []
     },
-    staleTime: 5 * 60 * 1000, // 5 minutes
-    gcTime: 10 * 60 * 1000, // 10 minutes
+    staleTime: 30 * 1000, // 30 seconds - keeps stock counts fresh after purchases
+    gcTime: 2 * 60 * 1000, // 2 minutes garbage collection
     retry: (failureCount, error) => {
       if (
         error instanceof Error &&

@@ -147,3 +147,43 @@ export function useDeleteOrder() {
 	})
 }
 
+// Cancel order mutation
+export function useCancelOrder() {
+	const queryClient = useQueryClient()
+
+	return useMutation({
+		mutationFn: async ({
+			orderId,
+			reason,
+			userId,
+		}: {
+			orderId: string
+			reason: string
+			userId: string // Made required to pass to server action
+		}) => {
+			const { cancelOrderWithRestock } = await import('@/services/order/cancelOrderServer');
+			const result = await cancelOrderWithRestock(orderId, reason, userId);
+			if (!result.success) {
+				throw new Error(result.error);
+			}
+			return { orderId, userId }
+		},
+		onSuccess: (_, variables) => {
+			// Invalidate specific order
+			queryClient.invalidateQueries({
+				queryKey: orderKeys.detail(variables.orderId),
+			})
+			// If userId provided, invalidate that user's orders list
+			if (variables.userId) {
+				queryClient.invalidateQueries({
+					queryKey: orderKeys.list(variables.userId),
+				})
+			}
+			// Invalidate all orders lists
+			queryClient.invalidateQueries({
+				queryKey: orderKeys.lists(),
+			})
+		},
+	})
+}
+

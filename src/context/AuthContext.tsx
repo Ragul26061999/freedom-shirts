@@ -1,21 +1,21 @@
 'use client'
 import { createContext, useContext, ReactNode } from 'react';
-import { Session, User } from '@supabase/supabase-js';
-import { useSupabaseAuth } from '../hooks/useSupabaseAuth';
+import { useFirebaseAuth } from '../hooks/useFirebaseAuth';
 
-type AuthContextType = {
-  session: Session | null;
-  user: User | null;
-  signUp: (email: string, password: string) => Promise<void>;
-  signIn: (email: string, password: string) => Promise<void>;
-  signOut: () => Promise<void>;
+
+interface AuthContextType {
+  user: any | null;
+  session: any | null;
   loading: boolean;
-};
+  signIn: (email: string, password: string) => Promise<void>;
+  signUp: (email: string, password: string) => Promise<void>;
+  signOut: () => Promise<void>;
+}
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const { user, session, loading, signIn, signUp, signOut } = useSupabaseAuth();
+  const { user, session, loading, signIn, signUp, signOut } = useFirebaseAuth();
 
   return (
     <AuthContext.Provider

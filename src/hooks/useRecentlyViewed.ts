@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { ProductType } from '@/types';
 
 const STORAGE_KEY = 'innova-recently-viewed';
@@ -20,7 +20,7 @@ export function useRecentlyViewed() {
     }
   }, []);
 
-  const addProduct = (product: ProductType) => {
+  const addProduct = useCallback((product: ProductType) => {
     setRecentProducts(prev => {
       // Remove if it already exists so we can move it to the front
       const filtered = prev.filter(p => p.product_id !== product.product_id);
@@ -28,7 +28,7 @@ export function useRecentlyViewed() {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
       return updated;
     });
-  };
+  }, []);
 
   return { recentProducts: isMounted ? recentProducts : [], addProduct };
 }

@@ -12,7 +12,7 @@ import { ErrorBoundary } from '@/components/ErrorBoundary'
 
 interface CategoryPageProps {
 	categoryName: string
-	categoryId: number
+	categoryId: string | number
 }
 
 export default function CategoryPage({

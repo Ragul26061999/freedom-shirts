@@ -14,7 +14,8 @@ export async function getProductsServer(): Promise<ProductType[]> {
       return [];
     }
 
-    return data as ProductType[];
+    const now = new Date();
+    return (data as ProductType[]).filter(p => !p.expiry_date || new Date(p.expiry_date) >= now);
   } catch (error) {
     console.error('Error in getProductsServer:', error);
     return [];

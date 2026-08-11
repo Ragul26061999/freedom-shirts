@@ -59,5 +59,25 @@ export async function createOrder({
     throw itemsError;
   }
 
+  // Reduce stock for each purchased product
+  for (const item of items) {
+    const { data: productData } = await supabase
+      .from('products')
+      .select('stock')
+      .eq('product_id', item.product_id)
+      .single();
+
+    if (productData) {
+      const newStock = Math.max(0, productData.stock - item.quantity);
+      await supabase
+        .from('products')
+        .update({
+          stock: newStock,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('product_id', item.product_id);
+    }
+  }
+
   return order;
 }
