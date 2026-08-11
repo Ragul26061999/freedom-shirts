@@ -286,18 +286,18 @@ export default function ProductDetailsClient({
                       )}
                     </div>
                     <div className="flex flex-wrap gap-3">
-                      {currentVariant.sizes.map((size, idx) => (
+                      {currentVariant.sizes.map((sizeObj, idx) => (
                         <button
                           key={idx}
-                          onClick={() => setSelectedSize(size)}
+                          onClick={() => setSelectedSize(sizeObj.size)}
                           className={`min-w-[3rem] h-12 px-4 rounded-md text-sm font-semibold border-2 transition-all cursor-pointer flex items-center justify-center
-                            ${selectedSize === size 
+                            ${selectedSize === sizeObj.size 
                               ? "border-primary bg-primary text-primary-foreground" 
                               : "border-border hover:border-primary/50 text-foreground bg-background"
                             }
                           `}
                         >
-                          {size}
+                          {sizeObj.size}
                         </button>
                       ))}
                     </div>
