@@ -27,7 +27,7 @@ export function useCartItems(
 ) {
   return useQuery({
     queryKey: cartKeys.items(),
-    queryFn: () => (cartId ? getCartItems(cartId) : Promise.resolve([])),
+    queryFn: () => (cartId ? getCartItems(cartId) as Promise<(CartItemType & { product: ProductType })[]> : Promise.resolve([])),
     enabled: !!cartId,
     ...options,
   });
