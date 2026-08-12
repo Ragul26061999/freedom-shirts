@@ -1,6 +1,6 @@
 import { db } from '@/lib/firebase/client';
 import { collection, query, where, getDocs, doc, getDoc, addDoc, updateDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
-import { ProductType, CartItemType, CartType, CartStatus } from '../../types';
+import { CartItemType, CartType, CartStatus } from '../../types';
 import { toast } from 'sonner';
 
 // Note: Ensure getClientUser fetches from Firebase Auth instead of Supabase
