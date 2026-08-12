@@ -7,9 +7,9 @@ const initFirebaseAdmin = () => {
     return getApps()[0];
   }
 
-  const projectId = process.env.FIREBASE_PROJECT_ID;
-  const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
-  const privateKey = process.env.FIREBASE_PRIVATE_KEY;
+  const projectId = (process.env.FIREBASE_PROJECT_ID || '').trim();
+  const clientEmail = (process.env.FIREBASE_CLIENT_EMAIL || '').trim();
+  const privateKey = process.env.FIREBASE_PRIVATE_KEY || '';
 
   if (!projectId || !clientEmail || !privateKey) {
     console.warn('Firebase Admin credentials missing. Skipping initialization during build.');
@@ -17,9 +17,13 @@ const initFirebaseAdmin = () => {
   }
 
   // Sanitize private key - remove surrounding quotes if present and fix newlines
-  const sanitizedPrivateKey = privateKey
-    .replace(/^"|"$/g, '')
-    .replace(/\\n/g, '\n');
+  let sanitizedPrivateKey = privateKey.trim();
+  if (sanitizedPrivateKey.startsWith('"') && sanitizedPrivateKey.endsWith('"')) {
+    sanitizedPrivateKey = sanitizedPrivateKey.slice(1, -1);
+  } else if (sanitizedPrivateKey.startsWith("'") && sanitizedPrivateKey.endsWith("'")) {
+    sanitizedPrivateKey = sanitizedPrivateKey.slice(1, -1);
+  }
+  sanitizedPrivateKey = sanitizedPrivateKey.replace(/\\n/g, '\n');
 
   try {
     const app = initializeApp({
