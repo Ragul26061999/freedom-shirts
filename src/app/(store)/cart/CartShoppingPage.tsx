@@ -173,7 +173,7 @@ export default function CartShoppingPage() {
                   {totalDiscount > 0 && (
                     <div className="flex justify-between text-green-600 text-sm">
                       <span>Offers & Discounts</span>
-                      <span>-${totalDiscount.toFixed(2)}</span>
+                      <span>-₹{totalDiscount.toFixed(2)}</span>
                     </div>
                   )}
                   <div className="flex justify-between font-medium">
