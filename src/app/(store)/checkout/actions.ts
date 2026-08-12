@@ -1,7 +1,6 @@
 'use server'
 
 import { Polar } from '@polar-sh/sdk'
-import { getAuthenticatedUser } from '@/lib/supabase/server'
 import { db } from '@/lib/firebase/admin'
 import { ProductType } from '@/types'
 
