@@ -15,7 +15,7 @@ import { NextResponse, type NextRequest } from 'next/server';
  * we use a custom cookie `__admin_token` that the admin login page sets after
  * successful sign-in. Alternatively this can be verified via Firebase Admin SDK.
  */
-export async function proxy(request: NextRequest) {
+export async function proxy(_request: NextRequest) {
   // Let the client-side AdminLayout handle security since Firebase auth state
   // is stored in IndexedDB and not immediately available via cookies.
   return NextResponse.next();
