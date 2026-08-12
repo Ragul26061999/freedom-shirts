@@ -1,16 +1,9 @@
-import { getAuthenticatedUser } from "@/lib/supabase/server";
-import { redirect } from "next/navigation";
 import CheckoutRedirect from "./CheckoutRedirect";
 
 // This is a Server Component by default, no need for 'use client'
 export default async function CheckoutPage() {
-	// Get authenticated user (server-side)
-	const user = await getAuthenticatedUser();
-
-	// Redirect to sign-in if not authenticated
-	if (!user) {
-		redirect("/signin");
-	}
-
+	// Temporarily bypass server-side auth check since Supabase is not configured
+	// on Vercel and auth is being handled via Firebase client-side.
+	
 	return <CheckoutRedirect />;
 }

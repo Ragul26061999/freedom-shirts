@@ -12,10 +12,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { createPolarCheckout } from "./actions";
 import { shippingService } from "@/services/admin/shippingService";
 import { useCart } from "@/context/CartContext";
+import { useAuth } from "@/context/AuthContext";
 
 export default function CheckoutRedirect() {
   const router = useRouter();
   const { subtotal } = useCart();
+  const { user } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
   const [isCalculating, setIsCalculating] = useState(false);
   const [shippingCost, setShippingCost] = useState(0);
@@ -86,6 +88,8 @@ export default function CheckoutRedirect() {
     setIsLoading(true);
     try {
       const result = await createPolarCheckout({
+        userId: user?.uid || user?.id || "guest",
+        userEmail: user?.email || undefined,
         shippingCharge: shippingCost,
         address: address,
         paymentMethod: paymentMethod
@@ -107,16 +111,18 @@ export default function CheckoutRedirect() {
   const total = subtotal + shippingCost;
 
   return (
-    <div className="bg-background min-h-screen py-12 px-4 sm:px-6">
-      <div className="mx-auto max-w-5xl grid grid-cols-1 md:grid-cols-2 gap-8">
-        
-        {/* Left Column - Address Form */}
-        <div>
-          <Card>
-            <CardHeader>
-              <CardTitle>Shipping Details</CardTitle>
-            </CardHeader>
-            <CardContent>
+    <div className="min-h-screen bg-gradient-to-b from-stone-50 to-white py-16 px-4 sm:px-6 font-sans">
+      <div className="mx-auto max-w-6xl">
+        <h1 className="text-3xl font-extrabold text-stone-900 mb-8 tracking-tight text-center md:text-left font-serif">Complete Your Order</h1>
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-10">
+          
+          {/* Left Column - Address Form */}
+          <div className="lg:col-span-7 xl:col-span-8 space-y-8">
+            <Card className="border-0 shadow-xl rounded-2xl overflow-hidden bg-white/80 backdrop-blur-sm">
+              <CardHeader className="bg-stone-100/50 border-b border-stone-100 pb-4">
+                <CardTitle className="text-xl font-semibold text-stone-800">1. Shipping Details</CardTitle>
+              </CardHeader>
+              <CardContent className="pt-6">
               <form id="checkout-form" onSubmit={handleSubmit} className="space-y-4">
                 <div className="space-y-2">
                   <Label htmlFor="street">Street Address *</Label>
@@ -193,11 +199,11 @@ export default function CheckoutRedirect() {
             </CardContent>
           </Card>
 
-          <Card className="mt-8">
-            <CardHeader>
-              <CardTitle>Payment Method</CardTitle>
+          <Card className="border-0 shadow-xl rounded-2xl overflow-hidden bg-white/80 backdrop-blur-sm">
+            <CardHeader className="bg-stone-100/50 border-b border-stone-100 pb-4">
+              <CardTitle className="text-xl font-semibold text-stone-800">2. Payment Method</CardTitle>
             </CardHeader>
-            <CardContent>
+            <CardContent className="pt-6">
               <div className="space-y-2">
                 <Label htmlFor="payment-method">Select Payment Option</Label>
                 <Select 
@@ -220,54 +226,54 @@ export default function CheckoutRedirect() {
         </div>
 
         {/* Right Column - Order Summary */}
-        <div>
-          <Card className="sticky top-6">
-            <CardHeader>
-              <CardTitle>Order Summary</CardTitle>
+        <div className="lg:col-span-5 xl:col-span-4 relative">
+          <Card className="sticky top-8 border-0 shadow-2xl rounded-2xl overflow-hidden bg-stone-900 text-stone-50">
+            <CardHeader className="border-b border-stone-800 pb-6 pt-8">
+              <CardTitle className="text-2xl font-bold tracking-wide">Order Summary</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex justify-between text-muted-foreground">
+            <CardContent className="space-y-6 pt-6">
+              <div className="flex justify-between text-stone-300 text-lg">
                 <span>Subtotal</span>
-                <span>₹{(subtotal || 0).toFixed(2)}</span>
+                <span className="font-medium text-white">₹{(subtotal || 0).toFixed(2)}</span>
               </div>
-              <div className="flex justify-between text-muted-foreground">
+              <div className="flex justify-between text-stone-300 text-lg">
                 <span className="flex items-center gap-2">
                   Shipping
-                  {isCalculating && <Loader2 className="h-3 w-3 animate-spin" />}
+                  {isCalculating && <Loader2 className="h-4 w-4 animate-spin text-stone-400" />}
                 </span>
-                <span>
+                <span className="font-medium text-white">
                   {address.state ? (
                     shippingCost === 0 ? "Free" : `₹${(shippingCost || 0).toFixed(2)}`
                   ) : (
-                    "Enter address to calculate"
+                    <span className="text-sm text-stone-400 italic">Enter address</span>
                   )}
                 </span>
               </div>
               
-              <div className="border-t pt-4 flex justify-between font-bold text-lg">
+              <div className="border-t border-stone-700 pt-6 mt-6 flex justify-between font-bold text-2xl items-center">
                 <span>Total</span>
-                <span>₹{(total || 0).toFixed(2)}</span>
+                <span className="text-amber-400">₹{(total || 0).toFixed(2)}</span>
               </div>
             </CardContent>
-            <CardFooter className="flex flex-col gap-3">
+            <CardFooter className="flex flex-col gap-4 pb-8">
               <Button 
                 type="submit" 
                 form="checkout-form" 
-                className="w-full h-12 text-lg" 
+                className="w-full h-14 text-lg font-bold bg-amber-500 hover:bg-amber-600 text-stone-900 rounded-xl transition-all shadow-lg hover:shadow-xl hover:-translate-y-1" 
                 disabled={isLoading || isCalculating || subtotal === 0}
               >
                 {isLoading ? (
                   <>
-                    <Loader2 className="mr-2 h-5 w-5 animate-spin" /> Processing...
+                    <Loader2 className="mr-2 h-6 w-6 animate-spin" /> Processing...
                   </>
                 ) : (
-                  `Proceed to Payment`
+                  `Proceed to Payment (₹${(total || 0).toFixed(2)})`
                 )}
               </Button>
               <Button 
                 type="button" 
-                variant="outline" 
-                className="w-full"
+                variant="ghost" 
+                className="w-full text-stone-400 hover:text-white hover:bg-stone-800"
                 onClick={() => router.push("/cart")}
               >
                 Return to Cart
@@ -277,6 +283,7 @@ export default function CheckoutRedirect() {
         </div>
 
       </div>
+    </div>
     </div>
   );
 }

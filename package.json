@@ -17,6 +17,7 @@
   "dependencies": {
     "@base-ui/react": "^1.4.1",
     "@polar-sh/sdk": "^0.47.0",
+    "@stripe/stripe-js": "^9.13.0",
     "@supabase/ssr": "^0.10.0",
     "@supabase/supabase-js": "^2.102.1",
     "@tanstack/react-form": "^1.28.6",
@@ -42,6 +43,7 @@
     "shadcn": "^4.6.0",
     "sharp": "^0.35.3",
     "sonner": "^2.0.7",
+    "stripe": "^22.5.0",
     "tailwind-merge": "^3.5.0",
     "zod": "^4.3.6"
   },

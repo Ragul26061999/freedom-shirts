@@ -39,6 +39,8 @@ async function getPolarProduct(): Promise<string> {
 }
 
 export async function createPolarCheckout(options?: {
+	userId?: string;
+	userEmail?: string;
 	shippingCharge?: number;
 	address?: {
 		street: string;
@@ -51,12 +53,12 @@ export async function createPolarCheckout(options?: {
 	paymentMethod?: string;
 }) {
 	try {
-		// Keep getAuthenticatedUser from Supabase for now since auth hasn't been migrated
-		const user = await getAuthenticatedUser()
-		if (!user) throw new Error('Unauthorized')
+		// Use the userId passed from the client instead of Supabase SSR since it's not configured
+		const userId = options?.userId
+		if (!userId) throw new Error('Unauthorized')
 
 		const cartSnapshot = await db.collection('carts')
-			.where('user_id', '==', user.id)
+			.where('user_id', '==', userId)
 			.where('status', '==', 'active')
 			.limit(1)
 			.get()
@@ -119,7 +121,7 @@ export async function createPolarCheckout(options?: {
 			console.warn('POLAR_ACCESS_TOKEN is missing. Returning a mock checkout session and creating a local mock order.');
 			
 			const addressRef = await db.collection('addresses').add({
-				user_id: user.id,
+				user_id: userId,
 				street: options?.address?.street || '',
 				city: options?.address?.city || '',
 				state: options?.address?.state || '',
@@ -130,7 +132,7 @@ export async function createPolarCheckout(options?: {
 			
 			const mockPaymentId = `mock_checkout_${Date.now()}`;
 			const orderRef = await db.collection('orders').add({
-				user_id: user.id,
+				user_id: userId,
 				total: totalAmount,
 				status: 'processing',
 				payment_id: mockPaymentId,
@@ -190,9 +192,9 @@ export async function createPolarCheckout(options?: {
 		const checkout = await polar.checkouts.create({
 			products: [polarProductId],
 			prices: prices as Parameters<typeof polar.checkouts.create>[0]['prices'],
-			externalCustomerId: user.id,
+			externalCustomerId: userId,
 			successUrl: `${baseUrl}/checkout/success?checkout_id={CHECKOUT_ID}`,
-			customerEmail: user.email || undefined,
+			customerEmail: options?.userEmail || undefined,
 		})
 
 		if (!checkout.url) {
