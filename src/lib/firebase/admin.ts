@@ -16,12 +16,17 @@ const initFirebaseAdmin = () => {
     return null;
   }
 
+  // Sanitize private key - remove surrounding quotes if present and fix newlines
+  const sanitizedPrivateKey = privateKey
+    .replace(/^"|"$/g, '')
+    .replace(/\\n/g, '\n');
+
   try {
     const app = initializeApp({
       credential: cert({
         projectId,
         clientEmail,
-        privateKey: privateKey.replace(/\\n/g, '\n'),
+        privateKey: sanitizedPrivateKey,
       }),
     });
     console.log('Firebase Admin initialized successfully');

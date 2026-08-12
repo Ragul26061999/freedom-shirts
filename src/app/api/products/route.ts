@@ -6,6 +6,14 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const categoryId = searchParams.get('category_id');
 
+    if (!db || typeof db.collection !== 'function') {
+      console.error('Firebase Admin is not initialized. Check your environment variables.');
+      return NextResponse.json(
+        { error: 'Server configuration error: Database not connected.' },
+        { status: 500 }
+      );
+    }
+
     let snapshot;
     if (categoryId) {
       snapshot = await db.collection('products').where('category_id', '==', categoryId).get();
