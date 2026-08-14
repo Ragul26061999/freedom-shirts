@@ -18,14 +18,14 @@ export async function createProfile(
 
     if (error) {
       console.error('Error creating profile:', error);
-      toast.error('Failed to create profile');
+      console.error('Failed to create profile');
       return null;
     }
 
     return data as ProfileType;
   } catch (error) {
     console.error('Error in createProfile:', error);
-    toast.error('Something went wrong');
+    console.error('Something went wrong');
     return null;
   }
 }

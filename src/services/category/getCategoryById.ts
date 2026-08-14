@@ -14,14 +14,14 @@ export async function getCategoryById(
 
     if (error) {
       console.error('Error fetching category:', error);
-      toast.error('Failed to fetch category');
+      console.error('Failed to fetch category');
       return null;
     }
 
     return data as CategoryType;
   } catch (error) {
     console.error('Error in getCategoryById:', error);
-    toast.error('Something went wrong');
+    console.error('Something went wrong');
     return null;
   }
 }

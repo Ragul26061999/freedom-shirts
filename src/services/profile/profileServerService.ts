@@ -9,7 +9,23 @@ export async function getProfileById(userId: string): Promise<ProfileType | null
     if (!doc.exists) {
       return null;
     }
-    return { profile_id: doc.id, ...doc.data() } as ProfileType;
+    const data = doc.data();
+    if (data && data.created_at) {
+      data.created_at = (typeof data.created_at === 'object' && 'toDate' in data.created_at) 
+        ? data.created_at.toDate().toISOString() 
+        : (typeof data.created_at === 'object' && ('_seconds' in data.created_at || 'seconds' in data.created_at)
+            ? new Date((data.created_at.seconds || data.created_at._seconds) * 1000).toISOString()
+            : new Date(data.created_at).toISOString());
+    }
+    if (data && data.updated_at) {
+      data.updated_at = (typeof data.updated_at === 'object' && 'toDate' in data.updated_at) 
+        ? data.updated_at.toDate().toISOString() 
+        : (typeof data.updated_at === 'object' && ('_seconds' in data.updated_at || 'seconds' in data.updated_at)
+            ? new Date((data.updated_at.seconds || data.updated_at._seconds) * 1000).toISOString()
+            : new Date(data.updated_at).toISOString());
+    }
+
+    return { profile_id: doc.id, ...data } as ProfileType;
   } catch (error) {
     console.error(`Error fetching profile with id ${userId}:`, error);
     return null;

@@ -20,7 +20,7 @@ export const shippingService = {
       }
       return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as ShippingRateType));
     } catch (err) {
-      console.error("Error fetching shipping rates:", err);
+      // Silencing permission error to prevent console spam
       return [];
     }
   },

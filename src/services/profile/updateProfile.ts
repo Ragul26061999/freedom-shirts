@@ -16,7 +16,7 @@ export async function updateProfile(
 
     if (error) {
       console.error('Error updating profile:', error);
-      toast.error('Failed to update profile');
+      console.error('Failed to update profile');
       return null;
     }
 
@@ -24,7 +24,7 @@ export async function updateProfile(
     return data as ProfileType;
   } catch (error) {
     console.error('Error in updateProfile:', error);
-    toast.error('Something went wrong');
+    console.error('Something went wrong');
     return null;
   }
 }

@@ -23,7 +23,7 @@ export default function PromoBannersClient({ initialBanners }: { initialBanners:
         setIsEditing(false);
       }
     } catch (error: any) {
-      toast.error("Failed to update banners: " + error.message);
+      console.error("Failed to update banners: " + error.message);
     }
   };
 

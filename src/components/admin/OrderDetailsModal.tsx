@@ -13,7 +13,6 @@ import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { User, MapPin, Calendar, Package, DollarSign } from "lucide-react";
 import { OrderWithDetails } from "@/services/admin/adminOrderService";
-import { useOrder } from "@/hooks/queries";
 import { formatCurrency } from "@/utils/formatCurrency";
 import { format } from "date-fns";
 import Image from "next/image";
@@ -45,16 +44,15 @@ export function OrderDetailsModal({
   onClose,
   order,
 }: OrderDetailsModalProps) {
-  // Use the query hook to fetch order details
-  const { data: orderDetails, isLoading: loading } = useOrder(
-    isOpen && order ? order.id.toString() : "",
-  );
+  // We already have all the details in the `order` prop! No need to refetch.
+  const loading = false;
+  const orderDetails = order;
 
   if (!order) return null;
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-h-[80vh] max-w-2xl">
+      <DialogContent className="max-h-[85vh] max-w-4xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Package className="h-5 w-5" />
@@ -78,8 +76,12 @@ export function OrderDetailsModal({
                   <p className="text-sm text-slate-600">
                     {order.created_at
                       ? format(
-                          new Date(order.created_at),
-                          "MMM dd, yyyy 'at' HH:mm",
+                          typeof order.created_at === 'object' && 'toDate' in (order.created_at as any)
+                            ? (order.created_at as any).toDate()
+                            : (typeof order.created_at === 'object' && 'seconds' in (order.created_at as any)
+                                ? new Date((order.created_at as any).seconds * 1000)
+                                : new Date(order.created_at)),
+                          "MMM dd, yyyy 'at' HH:mm"
                         )
                       : "Unknown date"}
                   </p>
@@ -243,16 +245,41 @@ export function OrderDetailsModal({
                     </div>
                   ))}
 
-                  {/* Order Total */}
-                  <div className="bg-card rounded-lg border p-4">
-                    <div className="flex justify-between">
-                      <span className="text-foreground text-lg font-semibold">
-                        Total:
-                      </span>
-                      <span className="text-lg font-bold text-emerald-600">
-                        {formatCurrency(order.total)}
-                      </span>
-                    </div>
+                  {/* Order Financials */}
+                  <div className="bg-card rounded-lg border p-4 space-y-2">
+                    {(() => {
+                      const itemsTotal = orderDetails.order_items?.reduce(
+                        (sum, item) => sum + item.quantity * item.price,
+                        0,
+                      ) || 0;
+                      const shippingCost = Math.max(0, order.total - itemsTotal);
+
+                      return (
+                        <>
+                          <div className="flex justify-between text-sm">
+                            <span className="text-muted-foreground">Subtotal:</span>
+                            <span className="font-medium text-slate-700">
+                              {formatCurrency(itemsTotal)}
+                            </span>
+                          </div>
+                          <div className="flex justify-between text-sm">
+                            <span className="text-muted-foreground">Shipping:</span>
+                            <span className="font-medium text-slate-700">
+                              {formatCurrency(shippingCost)}
+                            </span>
+                          </div>
+                          <Separator className="my-2" />
+                          <div className="flex justify-between">
+                            <span className="text-foreground text-lg font-semibold">
+                              Total:
+                            </span>
+                            <span className="text-lg font-bold text-emerald-600">
+                              {formatCurrency(order.total)}
+                            </span>
+                          </div>
+                        </>
+                      );
+                    })()}
                   </div>
                 </div>
               ) : (

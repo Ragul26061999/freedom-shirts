@@ -2,6 +2,9 @@ import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 import { Database } from '@/types/supabase';
 
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "http://mock-supabase-url.local";
+const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "mock-supabase-key";
+
 /**
  * Creates a Supabase client for server-side usage with proper cookie handling
  */
@@ -9,8 +12,8 @@ export const createServerSupabase = async () => {
   const cookieStore = await cookies();
 
   return createServerClient<Database>(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    supabaseUrl,
+    supabaseKey,
     {
       cookies: {
         getAll: () => cookieStore.getAll(),

@@ -54,6 +54,14 @@ service cloud.firestore {
     match /orders/{orderId} {
       allow create: if true;
       allow read: if (request.auth != null && resource.data.user_id == request.auth.uid) || isAdmin();
+      allow update: if (request.auth != null && resource.data.user_id == request.auth.uid) || isAdmin();
+      allow delete: if isAdmin();
+    }
+    
+    // Returns: Users can create and read their own. Admin does all.
+    match /returns/{returnId} {
+      allow create: if request.auth != null && request.resource.data.user_id == request.auth.uid;
+      allow read: if (request.auth != null && resource.data.user_id == request.auth.uid) || isAdmin();
       allow update, delete: if isAdmin();
     }
   }

@@ -44,21 +44,23 @@ const serializeDate = (val: any) => val && typeof val.toDate === 'function' ? va
 export const adminProductService = {
   async getAllProducts(): Promise<ProductWithDetails[]> {
     try {
-      const snapshot = await getDocs(collection(db, "products"));
+      const [snapshot, catSnapshot] = await Promise.all([
+        getDocs(collection(db, "products")),
+        getDocs(collection(db, "categories")).catch(() => ({ docs: [] } as any))
+      ]);
       
-      const products = await Promise.all(snapshot.docs.map(async (docSnap) => {
-        const data = docSnap.data();
-        let category = null;
+      const categoryMap = new Map<string, { id: number; name: string }>();
+      catSnapshot.docs.forEach((docSnap: any) => {
+        categoryMap.set(docSnap.id, {
+          id: Number(docSnap.id) || 0,
+          name: docSnap.data().name || "Uncategorized"
+        });
+      });
 
-        if (data.category_id) {
-          const catDoc = await getDoc(doc(db, "categories", String(data.category_id)));
-          if (catDoc.exists()) {
-            category = {
-              id: Number(catDoc.id),
-              name: catDoc.data().name
-            };
-          }
-        }
+      const products = snapshot.docs.map((docSnap) => {
+        const data = docSnap.data();
+        const catIdStr = String(data.category_id || "");
+        const category = categoryMap.get(catIdStr) || null;
 
         // Mock reviews for now since we don't have reviews migrated
         const total_reviews = 0;
@@ -75,7 +77,7 @@ export const adminProductService = {
           total_reviews,
           average_rating
         } as unknown as ProductWithDetails;
-      }));
+      });
 
       return products.sort((a, b) => {
         if (!a.created_at || !b.created_at) return 0;
@@ -229,8 +231,16 @@ export const adminProductService = {
 
   async getProductAnalytics() {
     try {
-      const snapshot = await getDocs(collection(db, "products"));
+      const [snapshot, catSnapshot] = await Promise.all([
+        getDocs(collection(db, "products")),
+        getDocs(collection(db, "categories")).catch(() => ({ docs: [] } as any))
+      ]);
       
+      const categoryMap = new Map<string, string>();
+      catSnapshot.docs.forEach((docSnap: any) => {
+        categoryMap.set(docSnap.id, docSnap.data().name || "Uncategorized");
+      });
+
       const totalProducts = snapshot.docs.length;
       let lowStockCount = 0;
       let totalInventoryValue = 0;
@@ -242,13 +252,8 @@ export const adminProductService = {
         if (data.stock < 10) lowStockCount++;
         totalInventoryValue += (data.price || 0) * (data.stock || 0);
 
-        let categoryName = "Uncategorized";
-        if (data.category_id) {
-          const catDoc = await getDoc(doc(db, "categories", String(data.category_id)));
-          if (catDoc.exists()) {
-            categoryName = catDoc.data().name;
-          }
-        }
+        const catIdStr = String(data.category_id || "");
+        const categoryName = categoryMap.get(catIdStr) || "Uncategorized";
         categoryStats[categoryName] = (categoryStats[categoryName] || 0) + 1;
       }
 

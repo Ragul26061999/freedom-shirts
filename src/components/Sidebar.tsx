@@ -18,6 +18,7 @@ import {
   User,
   RefreshCw,
   Truck,
+  RotateCcw,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import Link from "next/link";
@@ -94,10 +95,12 @@ export default function Sidebar() {
 
   // Mapping of categories from DB to display with icons and hrefs
   const categoryItems = [
-    { name: "All", icon: Home, href: "/" },
+    { name: "All", icon: Home, href: "/", image: null, emoji: "🏠" },
     ...(categories || []).map((category) => ({
       name: category.name,
       icon: categoryIcons[category.name] || Smartphone,
+      image: category.description && category.description.startsWith('http') ? category.description : null,
+      emoji: category.description && category.description.startsWith('http') ? null : "🛍️",
       href: `/${category.name.toLowerCase()}`,
     })),
   ];
@@ -114,6 +117,7 @@ export default function Sidebar() {
     { name: "Admin Dashboard", icon: Settings, href: "/admin" },
     { name: "Products", icon: Package, href: "/admin/products" },
     { name: "Orders", icon: ShoppingCart, href: "/admin/orders" },
+    { name: "Returns", icon: RotateCcw, href: "/admin/returns" },
     { name: "Users", icon: Users, href: "/admin/users" },
     { name: "Shipping", icon: Truck, href: "/admin/shipping" },
   ];
@@ -271,111 +275,111 @@ export default function Sidebar() {
           <SidebarGroup>
             {!isCollapsed && (
               <Motion variants={itemVariants} initial="closed" animate="open">
-                <SidebarGroupLabel className="text-muted-foreground text-xs font-medium tracking-wider uppercase">
+                <SidebarGroupLabel className="text-muted-foreground text-xs font-medium tracking-wider uppercase flex items-center justify-between">
                   Categories
+                  <span className="bg-muted text-muted-foreground rounded-full px-2 py-0.5 text-[10px]">
+                    {displayCategories.length}
+                  </span>
                 </SidebarGroupLabel>
               </Motion>
             )}
             <SidebarGroupContent>
-              <SidebarMenu>
-                {loading ? (
-                  <div className="animate-pulse space-y-2">
-                    {[1, 2, 3].map((n) => (
-                      <div
-                        key={n}
-                        className={cn(
-                          "bg-muted rounded-lg",
-                          isCollapsed ? "h-10 w-10" : "h-10",
-                        )}
-                      />
-                    ))}
-                  </div>
-                ) : categoriesError ? (
-                  <div
-                    className={cn(
-                      "bg-destructive/10 text-destructive border-destructive/20 space-y-2 rounded-lg border p-2 text-xs",
-                      isCollapsed && "px-1",
-                    )}
+              {loading ? (
+                <div className="animate-pulse space-y-2 p-2">
+                  {[1, 2, 3].map((n) => (
+                    <div
+                      key={n}
+                      className={cn(
+                        "bg-muted rounded-lg",
+                        isCollapsed ? "h-10 w-10" : "h-10",
+                      )}
+                    />
+                  ))}
+                </div>
+              ) : categoriesError ? (
+                <div
+                  className={cn(
+                    "bg-destructive/10 text-destructive border-destructive/20 space-y-2 rounded-lg border p-2 text-xs m-2",
+                    isCollapsed && "px-1",
+                  )}
+                >
+                  {!isCollapsed && (
+                    <p className="leading-snug font-medium">
+                      Couldn&apos;t load categories
+                    </p>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => void refetchCategories()}
+                    className="bg-background/80 text-foreground hover:bg-background flex w-full cursor-pointer items-center justify-center gap-1 rounded-md border px-2 py-1.5 text-xs font-medium"
+                    title="Retry loading categories"
                   >
-                    {!isCollapsed && (
-                      <p className="leading-snug font-medium">
-                        Couldn&apos;t load categories
-                      </p>
-                    )}
-                    <button
-                      type="button"
-                      onClick={() => void refetchCategories()}
-                      className="bg-background/80 text-foreground hover:bg-background flex w-full cursor-pointer items-center justify-center gap-1 rounded-md border px-2 py-1.5 text-xs font-medium"
-                      title="Retry loading categories"
-                    >
-                      <RefreshCw className="h-3 w-3 shrink-0" />
-                      {!isCollapsed && <span>Retry</span>}
-                    </button>
-                  </div>
-                ) : (
-                  <Motion
-                    variants={staggerVariants}
-                    initial="closed"
-                    animate="open"
-                  >
-                    {displayCategories.map((category) => {
-                      const isActive = pathname === category.href;
-                      const Icon = category.icon;
+                    <RefreshCw className="h-3 w-3 shrink-0" />
+                    {!isCollapsed && <span>Retry</span>}
+                  </button>
+                </div>
+              ) : (
+                <Motion
+                  variants={staggerVariants}
+                  initial="closed"
+                  animate="open"
+                  className={cn(
+                    "transition-all duration-300",
+                    !isCollapsed ? "grid grid-cols-2 gap-3 p-3" : "flex flex-col space-y-2 p-2"
+                  )}
+                >
+                  {displayCategories.map((category) => {
+                    const isActive = pathname === category.href;
+                    const Icon = category.icon;
 
+                    if (isCollapsed) {
+                      // Compact view (icons only) when sidebar is collapsed
                       return (
-                        <Motion
-                          key={category.name}
-                          variants={itemVariants}
-                          initial="closed"
-                          animate="open"
-                        >
-                          <SidebarMenuItem>
-                            <SidebarMenuButton
-                              render={<Link href={category.href} />}
-                              isActive={isActive}
-                              className={cn(
-                                "group relative transition-all duration-200",
-                                isActive
-                                  ? "bg-primary/10 text-primary border-primary/20 border"
-                                  : "hover:translate-x-1",
-                              )}
-                              tooltip={category.name}
-                            >
-                              <Icon
-                                className={cn(
-                                  "h-4 w-4 transition-all duration-200",
-                                  isActive
-                                    ? "text-primary"
-                                    : "text-muted-foreground group-hover:text-foreground",
-                                )}
-                              />
-                              {!isCollapsed && (
-                                <span className="text-sm font-medium">
-                                  {category.name}
-                                </span>
-                              )}
-                              {/* Active indicator */}
-                              {isActive && (
-                                <Motion
-                                  variants={indicatorVariants}
-                                  initial="closed"
-                                  animate="open"
-                                  transition={{
-                                    type: "spring",
-                                    stiffness: 500,
-                                    damping: 30,
-                                  }}
-                                  className="bg-primary absolute right-2 h-2 w-2 rounded-full"
-                                />
-                              )}
-                            </SidebarMenuButton>
-                          </SidebarMenuItem>
+                        <Motion key={category.name} variants={itemVariants} initial="closed" animate="open">
+                          <Link href={category.href} className="flex justify-center">
+                            <div className={cn(
+                              "w-10 h-10 rounded-lg flex items-center justify-center border transition-all duration-200",
+                              isActive ? "bg-primary/10 border-primary/30 text-primary" : "bg-transparent border-transparent hover:bg-muted text-muted-foreground hover:text-foreground"
+                            )} title={category.name}>
+                              <Icon className="h-5 w-5" />
+                            </div>
+                          </Link>
                         </Motion>
                       );
-                    })}
-                  </Motion>
-                )}
-              </SidebarMenu>
+                    }
+
+                    // Expanded Icon Grid view
+                    return (
+                      <Motion key={category.name} variants={itemVariants} initial="closed" animate="open">
+                        <Link 
+                          href={category.href}
+                          className={cn(
+                            "flex flex-col items-center gap-2 group p-2 rounded-xl transition-all duration-300",
+                            isActive ? "bg-primary/5" : "hover:bg-muted/50"
+                          )}
+                        >
+                          <div className={cn(
+                            "w-14 h-14 rounded-full flex items-center justify-center overflow-hidden border shadow-sm transition-all duration-300 group-hover:shadow-md group-hover:scale-105",
+                            isActive ? "border-primary/50 ring-2 ring-primary/20" : "bg-background border-border/50 group-hover:border-primary/30"
+                          )}>
+                            {category.image ? (
+                              <img src={category.image} alt={category.name} className="w-full h-full object-cover" />
+                            ) : (
+                              <Icon className={cn("h-6 w-6 transition-colors", isActive ? "text-primary" : "text-muted-foreground group-hover:text-primary")} />
+                            )}
+                          </div>
+                          <span className={cn(
+                            "text-xs font-medium text-center line-clamp-1 transition-colors",
+                            isActive ? "text-primary" : "text-muted-foreground group-hover:text-foreground"
+                          )}>
+                            {category.name}
+                          </span>
+                        </Link>
+                      </Motion>
+                    );
+                  })}
+                </Motion>
+              )}
             </SidebarGroupContent>
           </SidebarGroup>
         </Motion>

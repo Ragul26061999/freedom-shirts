@@ -35,7 +35,7 @@ export function HeroSectionClient({ initialSlides }: { initialSlides: any[] }) {
         setIsEditing(false);
       }
     } catch (error: any) {
-      toast.error("Failed to update hero section: " + error.message);
+      console.error("Failed to update hero section: " + error.message);
     }
   };
 

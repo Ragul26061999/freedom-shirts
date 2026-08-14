@@ -24,7 +24,7 @@ export async function getActiveCart() {
     return { id: cartDoc.id, ...cartDoc.data() } as CartType;
   } catch (error) {
     console.error('Error in getActiveCart:', error);
-    toast.error('Failed to fetch cart');
+    console.error('Failed to fetch cart');
     return null;
   }
 }
@@ -45,7 +45,7 @@ export async function createCart() {
     return { id: docRef.id, ...newCart } as unknown as CartType;
   } catch (error) {
     console.error('Error in createCart:', error);
-    toast.error('Failed to create cart');
+    console.error('Failed to create cart');
     return null;
   }
 }
@@ -76,7 +76,7 @@ export async function getCartItems(cartId: string) {
     return items;
   } catch (error) {
     console.error('Error in getCartItems:', error);
-    toast.error('Failed to fetch cart items');
+    console.error('Failed to fetch cart items');
     return [];
   }
 }
@@ -91,7 +91,7 @@ export async function clearCart(cartId: string) {
     return true;
   } catch (error) {
     console.error('Error in clearCart:', error);
-    toast.error('Failed to clear cart');
+    console.error('Failed to clear cart');
     return false;
   }
 }
@@ -102,7 +102,7 @@ export async function removeCartItem(cartItemId: string) {
     return true;
   } catch (error) {
     console.error('Error in removeCartItem:', error);
-    toast.error('Failed to remove item');
+    console.error('Failed to remove item');
     return false;
   }
 }
@@ -123,7 +123,7 @@ export async function updateCartItemQuantity(cartItemId: string, quantity: numbe
     return { id: updatedSnap.id, ...updatedSnap.data() } as unknown as CartItemType;
   } catch (error) {
     console.error('Error in updateCartItemQuantity:', error);
-    toast.error('Failed to update quantity');
+    console.error('Failed to update quantity');
     return null;
   }
 }
@@ -161,7 +161,7 @@ export async function addItemToCart(cartId: string, productId: string, _price: n
     }
   } catch (error) {
     console.error('Error in addItemToCart:', error);
-    toast.error('Failed to add item to cart');
+    console.error('Failed to add item to cart');
     return null;
   }
 }
@@ -181,7 +181,7 @@ export async function findCartItemByProductId(cartId: string, productId: string)
     return { id: cartDoc.id, ...cartDoc.data() } as CartItemType;
   } catch (error) {
     console.error('Error in findCartItemByProductId:', error);
-    toast.error('Failed to find cart item');
+    console.error('Failed to find cart item');
     return null;
   }
 }

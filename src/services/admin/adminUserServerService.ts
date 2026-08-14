@@ -55,40 +55,51 @@ export const adminUserServerService = {
       const start = (page - 1) * limit;
       const paginatedDocs = docs.slice(start, start + limit);
 
-      const usersWithStats = await Promise.all(
-        paginatedDocs.map(async (d: any) => {
-          const user = d.data();
-          const profile_id = d.id;
+      // Fetch all orders once in parallel to build user order stats in memory
+      const allOrdersSnap = await getDocs(collection(db, "orders")).catch(() => ({ docs: [] } as any));
+      const ordersByUserMap = new Map<string, any[]>();
 
-          const ordersSnap = await getDocs(query(collection(db, "orders"), where("user_id", "==", profile_id)));
-          const userOrders = ordersSnap.docs.map(o => ({ id: o.id, ...o.data() } as any));
+      allOrdersSnap.docs.forEach((o: any) => {
+        const orderData = { id: o.id, ...o.data() };
+        const uid = orderData.user_id;
+        if (uid) {
+          if (!ordersByUserMap.has(uid)) {
+            ordersByUserMap.set(uid, []);
+          }
+          ordersByUserMap.get(uid)!.push(orderData);
+        }
+      });
 
-          const totalOrders = userOrders.length;
-          const totalSpent = userOrders.reduce((sum, o) => sum + (o.total || 0), 0);
-          
-          userOrders.sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime());
-          const lastOrderAt = userOrders[0]?.created_at || null;
+      const thirtyDaysAgo = new Date();
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
-          const thirtyDaysAgo = new Date();
-          thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-          const isActive = userOrders.some(o => new Date(o.created_at) > thirtyDaysAgo);
+      const usersWithStats = paginatedDocs.map((d: any) => {
+        const user = d.data();
+        const profile_id = d.id;
 
-          const topProducts: any[] = [];
+        const userOrders = ordersByUserMap.get(profile_id) || [];
+        const totalOrders = userOrders.length;
+        const totalSpent = userOrders.reduce((sum, o) => sum + (o.total || 0), 0);
 
-          return {
-            profile_id,
-            username: user.username || "",
-            email: user.email || "",
-            role: user.role || "user",
-            created_at: user.created_at || "",
-            total_orders: totalOrders,
-            total_spent: totalSpent,
-            last_order_at: lastOrderAt,
-            is_active: isActive,
-            top_products: topProducts,
-          };
-        })
-      );
+        userOrders.sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime());
+        const lastOrderAt = userOrders[0]?.created_at || null;
+        const isActive = userOrders.some((o) => new Date(o.created_at) > thirtyDaysAgo);
+
+        const topProducts: any[] = [];
+
+        return {
+          profile_id,
+          username: user.username || "",
+          email: user.email || "",
+          role: user.role || "user",
+          created_at: user.created_at || "",
+          total_orders: totalOrders,
+          total_spent: totalSpent,
+          last_order_at: lastOrderAt,
+          is_active: isActive,
+          top_products: topProducts,
+        };
+      });
 
       return { users: usersWithStats, total };
     } catch (err) {

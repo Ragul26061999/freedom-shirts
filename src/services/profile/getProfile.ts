@@ -12,14 +12,14 @@ export async function getProfile(userId: string): Promise<ProfileType | null> {
 
     if (error && error.code !== 'PGRST116') {
       console.error('Error fetching profile:', error);
-      toast.error('Failed to fetch profile');
+      console.error('Failed to fetch profile');
       return null;
     }
 
     return data as ProfileType | null;
   } catch (error) {
     console.error('Error in getProfile:', error);
-    toast.error('Something went wrong');
+    console.error('Something went wrong');
     return null;
   }
 }

@@ -6,18 +6,16 @@ import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/componen
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { createPolarCheckout } from "./actions";
-import { shippingService } from "@/services/admin/shippingService";
+import { createPolarCheckout, getShippingRatesAction } from "./actions";
 import { useCart } from "@/context/CartContext";
 import { useAuth } from "@/context/AuthContext";
 
 export default function CheckoutRedirect() {
   const router = useRouter();
-  const { subtotal } = useCart();
   const { user } = useAuth();
+  const { subtotal } = useCart();
   const [isLoading, setIsLoading] = useState(false);
   const [isCalculating, setIsCalculating] = useState(false);
   const [shippingCost, setShippingCost] = useState(0);
@@ -31,13 +29,16 @@ export default function CheckoutRedirect() {
     zip_code: "",
     phone: "",
   });
-  
+
   const [availableStates, setAvailableStates] = useState<string[]>([]);
+
+  const [ratesData, setRatesData] = useState<Array<{state: string, district?: string, charge: number}>>([]);
 
   useEffect(() => {
     async function fetchAvailableStates() {
       try {
-        const rates = await shippingService.getShippingRates();
+        const rates = await getShippingRatesAction();
+        setRatesData(rates);
         // Extract unique state names (filter out nulls)
         const uniqueStates = Array.from(new Set(rates.map(r => r.state).filter(Boolean))) as string[];
         setAvailableStates(uniqueStates);
@@ -57,39 +58,57 @@ export default function CheckoutRedirect() {
       }
       setIsCalculating(true);
       try {
-        const cost = await shippingService.calculateShippingCharge(
-          address.state, 
-          address.district || address.city
+        const userState = (address.state || "").trim().toLowerCase();
+        const userDistrict = (address.district || address.city || "").trim().toLowerCase();
+        
+        // Find exact match (state + district/city)
+        const exactMatch = ratesData.find(r => 
+          r.state?.trim().toLowerCase() === userState && 
+          r.district?.trim().toLowerCase() === userDistrict
         );
-        setShippingCost(cost);
-      } catch (err) {
-        console.error("Error calculating shipping:", err);
+        
+        if (exactMatch) {
+          setShippingCost(exactMatch.charge);
+        } else {
+          // Find state-only match (where admin left district blank)
+          const stateMatch = ratesData.find(r => 
+            r.state?.trim().toLowerCase() === userState && 
+            (!r.district || r.district.trim() === "")
+          );
+          if (stateMatch) {
+            setShippingCost(stateMatch.charge);
+          } else {
+            setShippingCost(0); // Free or default if unlisted, typically 0
+          }
+        }
+      } catch (error) {
+        console.error("Error calculating shipping:", error);
       } finally {
         setIsCalculating(false);
       }
     }
-    
+
     // Debounce slightly to avoid too many requests
     const timeoutId = setTimeout(() => {
       updateShipping();
     }, 500);
-    
+
     return () => clearTimeout(timeoutId);
   }, [address.state, address.district, address.city]);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    
+
     if (!address.street || !address.city || !address.state || !address.zip_code || !address.phone) {
-      toast.error("Please fill in all required fields");
+      console.error("Please fill in all required fields");
       return;
     }
 
     setIsLoading(true);
     try {
       const result = await createPolarCheckout({
-        userId: user?.uid || user?.id || "guest",
-        userEmail: user?.email || undefined,
+        userId: user?.id || user?.uid,
+        userEmail: user?.email,
         shippingCharge: shippingCost,
         address: address,
         paymentMethod: paymentMethod
@@ -104,53 +123,51 @@ export default function CheckoutRedirect() {
     } catch (err) {
       console.error("Error creating checkout session:", err);
       setIsLoading(false);
-      toast.error(err instanceof Error ? err.message : "Failed to start checkout. Please try again.");
+      console.error(err instanceof Error ? err.message : "Failed to start checkout. Please try again.");
     }
   };
 
   const total = subtotal + shippingCost;
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-stone-50 to-white py-16 px-4 sm:px-6 font-sans">
-      <div className="mx-auto max-w-6xl">
-        <h1 className="text-3xl font-extrabold text-stone-900 mb-8 tracking-tight text-center md:text-left font-serif">Complete Your Order</h1>
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-10">
-          
-          {/* Left Column - Address Form */}
-          <div className="lg:col-span-7 xl:col-span-8 space-y-8">
-            <Card className="border-0 shadow-xl rounded-2xl overflow-hidden bg-white/80 backdrop-blur-sm">
-              <CardHeader className="bg-stone-100/50 border-b border-stone-100 pb-4">
-                <CardTitle className="text-xl font-semibold text-stone-800">1. Shipping Details</CardTitle>
-              </CardHeader>
-              <CardContent className="pt-6">
+    <div className="bg-background min-h-screen py-12 px-4 sm:px-6">
+      <div className="mx-auto max-w-5xl grid grid-cols-1 md:grid-cols-2 gap-8">
+
+        {/* Left Column - Address Form */}
+        <div>
+          <Card>
+            <CardHeader>
+              <CardTitle>Shipping Details</CardTitle>
+            </CardHeader>
+            <CardContent>
               <form id="checkout-form" onSubmit={handleSubmit} className="space-y-4">
                 <div className="space-y-2">
                   <Label htmlFor="street">Street Address *</Label>
-                  <Input 
-                    id="street" 
-                    required 
-                    value={address.street} 
-                    onChange={e => setAddress({...address, street: e.target.value})} 
+                  <Input
+                    id="street"
+                    required
+                    value={address.street}
+                    onChange={e => setAddress({ ...address, street: e.target.value })}
                   />
                 </div>
-                
+
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="city">City *</Label>
-                    <Input 
-                      id="city" 
-                      required 
-                      value={address.city} 
-                      onChange={e => setAddress({...address, city: e.target.value})} 
+                    <Input
+                      id="city"
+                      required
+                      value={address.city}
+                      onChange={e => setAddress({ ...address, city: e.target.value })}
                     />
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="zip_code">Zip/Postal Code *</Label>
-                    <Input 
-                      id="zip_code" 
-                      required 
-                      value={address.zip_code} 
-                      onChange={e => setAddress({...address, zip_code: e.target.value})} 
+                    <Input
+                      id="zip_code"
+                      required
+                      value={address.zip_code}
+                      onChange={e => setAddress({ ...address, zip_code: e.target.value })}
                     />
                   </div>
                 </div>
@@ -158,10 +175,10 @@ export default function CheckoutRedirect() {
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="state">State / Province *</Label>
-                    <Select 
+                    <Select
                       required
-                      value={address.state} 
-                      onValueChange={(value) => setAddress({...address, state: value || ""})}
+                      value={address.state}
+                      onValueChange={(value) => setAddress({ ...address, state: value || "" })}
                     >
                       <SelectTrigger id="state">
                         <SelectValue placeholder="Select a state" />
@@ -177,38 +194,38 @@ export default function CheckoutRedirect() {
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="district">District (Optional)</Label>
-                    <Input 
-                      id="district" 
-                      value={address.district} 
-                      onChange={e => setAddress({...address, district: e.target.value})} 
+                    <Input
+                      id="district"
+                      value={address.district}
+                      onChange={e => setAddress({ ...address, district: e.target.value })}
                     />
                   </div>
                 </div>
 
                 <div className="space-y-2">
                   <Label htmlFor="phone">Phone Number *</Label>
-                  <Input 
-                    id="phone" 
-                    type="tel" 
-                    required 
-                    value={address.phone} 
-                    onChange={e => setAddress({...address, phone: e.target.value})} 
+                  <Input
+                    id="phone"
+                    type="tel"
+                    required
+                    value={address.phone}
+                    onChange={e => setAddress({ ...address, phone: e.target.value })}
                   />
                 </div>
               </form>
             </CardContent>
           </Card>
 
-          <Card className="border-0 shadow-xl rounded-2xl overflow-hidden bg-white/80 backdrop-blur-sm">
-            <CardHeader className="bg-stone-100/50 border-b border-stone-100 pb-4">
-              <CardTitle className="text-xl font-semibold text-stone-800">2. Payment Method</CardTitle>
+          <Card className="mt-8">
+            <CardHeader>
+              <CardTitle>Payment Method</CardTitle>
             </CardHeader>
-            <CardContent className="pt-6">
+            <CardContent>
               <div className="space-y-2">
                 <Label htmlFor="payment-method">Select Payment Option</Label>
-                <Select 
+                <Select
                   required
-                  value={paymentMethod} 
+                  value={paymentMethod}
                   onValueChange={(val) => setPaymentMethod(val || "Polar / Credit Card")}
                 >
                   <SelectTrigger id="payment-method">
@@ -226,54 +243,54 @@ export default function CheckoutRedirect() {
         </div>
 
         {/* Right Column - Order Summary */}
-        <div className="lg:col-span-5 xl:col-span-4 relative">
-          <Card className="sticky top-8 border-0 shadow-2xl rounded-2xl overflow-hidden bg-stone-900 text-stone-50">
-            <CardHeader className="border-b border-stone-800 pb-6 pt-8">
-              <CardTitle className="text-2xl font-bold tracking-wide">Order Summary</CardTitle>
+        <div>
+          <Card className="sticky top-6">
+            <CardHeader>
+              <CardTitle>Order Summary</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-6 pt-6">
-              <div className="flex justify-between text-stone-300 text-lg">
+            <CardContent className="space-y-4">
+              <div className="flex justify-between text-muted-foreground">
                 <span>Subtotal</span>
-                <span className="font-medium text-white">₹{(subtotal || 0).toFixed(2)}</span>
+                <span>₹{(subtotal || 0).toFixed(2)}</span>
               </div>
-              <div className="flex justify-between text-stone-300 text-lg">
+              <div className="flex justify-between text-muted-foreground">
                 <span className="flex items-center gap-2">
                   Shipping
-                  {isCalculating && <Loader2 className="h-4 w-4 animate-spin text-stone-400" />}
+                  {isCalculating && <Loader2 className="h-3 w-3 animate-spin" />}
                 </span>
-                <span className="font-medium text-white">
+                <span>
                   {address.state ? (
                     shippingCost === 0 ? "Free" : `₹${(shippingCost || 0).toFixed(2)}`
                   ) : (
-                    <span className="text-sm text-stone-400 italic">Enter address</span>
+                    "Enter address to calculate"
                   )}
                 </span>
               </div>
-              
-              <div className="border-t border-stone-700 pt-6 mt-6 flex justify-between font-bold text-2xl items-center">
+
+              <div className="border-t pt-4 flex justify-between font-bold text-lg">
                 <span>Total</span>
-                <span className="text-amber-400">₹{(total || 0).toFixed(2)}</span>
+                <span>₹{(total || 0).toFixed(2)}</span>
               </div>
             </CardContent>
-            <CardFooter className="flex flex-col gap-4 pb-8">
-              <Button 
-                type="submit" 
-                form="checkout-form" 
-                className="w-full h-14 text-lg font-bold bg-amber-500 hover:bg-amber-600 text-stone-900 rounded-xl transition-all shadow-lg hover:shadow-xl hover:-translate-y-1" 
+            <CardFooter className="flex flex-col gap-3">
+              <Button
+                type="submit"
+                form="checkout-form"
+                className="w-full h-12 text-lg"
                 disabled={isLoading || isCalculating || subtotal === 0}
               >
                 {isLoading ? (
                   <>
-                    <Loader2 className="mr-2 h-6 w-6 animate-spin" /> Processing...
+                    <Loader2 className="mr-2 h-5 w-5 animate-spin" /> Processing...
                   </>
                 ) : (
-                  `Proceed to Payment (₹${(total || 0).toFixed(2)})`
+                  `Proceed to Payment`
                 )}
               </Button>
-              <Button 
-                type="button" 
-                variant="ghost" 
-                className="w-full text-stone-400 hover:text-white hover:bg-stone-800"
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full"
                 onClick={() => router.push("/cart")}
               >
                 Return to Cart
@@ -283,7 +300,6 @@ export default function CheckoutRedirect() {
         </div>
 
       </div>
-    </div>
     </div>
   );
 }

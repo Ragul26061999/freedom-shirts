@@ -49,7 +49,7 @@ export default function ShippingManagementPage() {
       const data = await shippingService.getShippingRates();
       setRates(data);
     } catch (error) {
-      toast.error("Failed to load shipping rates.");
+      console.error("Failed to load shipping rates.");
     } finally {
       setLoading(false);
     }
@@ -82,14 +82,14 @@ export default function ShippingManagementPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.state || !formData.charge) {
-      toast.error("State and Charge are required.");
+      console.error("State and Charge are required.");
       return;
     }
 
     try {
       const chargeAmount = parseFloat(formData.charge);
       if (isNaN(chargeAmount) || chargeAmount < 0) {
-        toast.error("Charge must be a valid positive number.");
+        console.error("Charge must be a valid positive number.");
         return;
       }
 
@@ -112,7 +112,7 @@ export default function ShippingManagementPage() {
       loadRates();
       handleCloseModal();
     } catch (error) {
-      toast.error("Failed to save shipping rate.");
+      console.error("Failed to save shipping rate.");
     }
   };
 
@@ -123,7 +123,7 @@ export default function ShippingManagementPage() {
       toast.success("Shipping rate deleted.");
       loadRates();
     } catch (error) {
-      toast.error("Failed to delete shipping rate.");
+      console.error("Failed to delete shipping rate.");
     }
   };
 

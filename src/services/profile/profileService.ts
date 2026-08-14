@@ -23,14 +23,14 @@ export const profileService = {
 
       if (error) {
         console.error('Error fetching profile:', error);
-        toast.error('Failed to fetch profile');
+        console.error('Failed to fetch profile');
         return null;
       }
 
       return data as ProfileType;
     } catch (error) {
       console.error('Error in getProfileById:', error);
-      toast.error('Something went wrong');
+      console.error('Something went wrong');
       return null;
     }
   },
@@ -50,7 +50,7 @@ export const profileService = {
       return await this.getProfileById(user.id);
     } catch (error) {
       console.error('Error in getCurrentProfile:', error);
-      toast.error('Something went wrong');
+      console.error('Something went wrong');
       return null;
     }
   },
@@ -78,14 +78,14 @@ export const profileService = {
 
       if (error) {
         console.error('Error updating profile:', error);
-        toast.error('Failed to update profile');
+        console.error('Failed to update profile');
         return null;
       }
 
       return profile as ProfileType;
     } catch (error) {
       console.error('Error in updateProfile:', error);
-      toast.error('Something went wrong');
+      console.error('Something went wrong');
       return null;
     }
   },
@@ -108,7 +108,7 @@ export const profileService = {
       return await this.updateProfile(user.id, data);
     } catch (error) {
       console.error('Error in updateCurrentProfile:', error);
-      toast.error('Something went wrong');
+      console.error('Something went wrong');
       return null;
     }
   },
@@ -319,7 +319,7 @@ export const profileService = {
       return publicUrlData.publicUrl;
     } catch (error) {
       console.error('Error in uploadAvatar:', error);
-      toast.error('Failed to upload avatar');
+      console.error('Failed to upload avatar');
       return null;
     }
   },
@@ -339,14 +339,14 @@ export const profileService = {
 
       if (error) {
         console.error('Error deleting profile:', error);
-        toast.error('Failed to delete profile');
+        console.error('Failed to delete profile');
         return false;
       }
 
       return true;
     } catch (error) {
       console.error('Error in deleteProfile:', error);
-      toast.error('Something went wrong');
+      console.error('Something went wrong');
       return false;
     }
   },
@@ -366,7 +366,7 @@ export const profileService = {
       return await this.deleteProfile(user.id);
     } catch (error) {
       console.error('Error in deleteCurrentProfile:', error);
-      toast.error('Something went wrong');
+      console.error('Something went wrong');
       return false;
     }
   },

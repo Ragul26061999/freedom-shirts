@@ -8,7 +8,7 @@ export async function deleteAddress(addressId: string) {
     .eq('id', addressId);
 
   if (error) {
-    toast.error('Failed to delete address');
+    console.error('Failed to delete address');
     throw error;
   }
   return true;

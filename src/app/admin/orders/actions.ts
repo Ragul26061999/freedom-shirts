@@ -22,12 +22,18 @@ export async function updateOrderStatusAction(orderId: number, status: string) {
     // Create admin client bypassing RLS
     const supabaseAdmin = createClient(supabaseUrl, supabaseKey);
 
+    const updatePayload: any = { 
+      status, 
+      updated_at: new Date().toISOString() 
+    };
+
+    if (status === "delivered") {
+      updatePayload.delivered_at = new Date().toISOString();
+    }
+
     const { data, error } = await supabaseAdmin
       .from('orders')
-      .update({ 
-        status, 
-        updated_at: new Date().toISOString() 
-      })
+      .update(updatePayload)
       .eq('id', orderId)
       .select()
       .single();

@@ -86,8 +86,11 @@ export interface OrderType {
   payment_id?: string;
   created_at?: string;
   updated_at?: string;
+  delivered_at?: string;
   cancellation_reason?: string;
   order_items?: OrderItemType[];
+  has_return?: boolean;
+  return_status?: ReturnStatus;
 }
 
 export interface AddressType {
@@ -134,4 +137,56 @@ export interface ShippingRateType {
   district?: string;
   charge: number;
   created_at?: string;
+}
+
+// ----------------- Return Management Types ----------------- //
+
+export type ReturnStatus =
+  | "pending"
+  | "approved"
+  | "rejected"
+  | "pickup_scheduled"
+  | "received"
+  | "completed";
+
+export type ReturnReasonCategory =
+  | "size_issue"
+  | "defective_damaged"
+  | "wrong_item"
+  | "quality_issue"
+  | "not_as_described"
+  | "other";
+
+export interface ReturnItemType {
+  product_id: string;
+  title: string;
+  image?: string;
+  quantity: number;
+  price: number;
+  selectedColor?: string;
+  selectedSize?: string;
+}
+
+export interface ReturnRequestType {
+  id: string;
+  order_id: number;
+  user_id: string;
+  created_at: string;
+  delivered_at: string;
+  items: ReturnItemType[];
+  reason_category: ReturnReasonCategory;
+  detailed_reason: string;
+  proof_images?: string[];
+  preferred_resolution: "refund" | "replacement" | "store_credit";
+  status: ReturnStatus;
+  admin_notes?: string;
+  restocked?: boolean;
+  refund_amount: number;
+  refund_status?: "pending" | "processed" | "failed";
+  updated_at?: string;
+  profile?: {
+    username?: string;
+    email?: string;
+  };
+  shipping_address?: AddressType;
 }

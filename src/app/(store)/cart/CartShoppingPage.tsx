@@ -98,7 +98,7 @@ export default function CartShoppingPage() {
                       className="h-full w-full object-contain p-1"
                     />
                   </div>
-                  
+
                   <div className="flex-1 min-w-0">
                     <h3 className="font-semibold text-base truncate">{item.title}</h3>
                     {(item.selectedColor || item.selectedSize) && (
@@ -111,11 +111,11 @@ export default function CartShoppingPage() {
                       {item.description}
                     </p>
                   </div>
-                  
+
                   <div className="text-base font-bold whitespace-nowrap">
                     ₹{(item.price || 0).toFixed(2)}
                   </div>
-                  
+
                   <div className="flex items-center gap-1 sm:gap-2">
                     <div className="flex items-center border rounded-md h-8 bg-background">
                       <Button
@@ -173,7 +173,7 @@ export default function CartShoppingPage() {
                   {totalDiscount > 0 && (
                     <div className="flex justify-between text-green-600 text-sm">
                       <span>Offers & Discounts</span>
-                      <span>-₹{totalDiscount.toFixed(2)}</span>
+                      <span>-${totalDiscount.toFixed(2)}</span>
                     </div>
                   )}
                   <div className="flex justify-between font-medium">

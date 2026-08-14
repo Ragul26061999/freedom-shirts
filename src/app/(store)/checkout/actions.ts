@@ -52,7 +52,7 @@ export async function createPolarCheckout(options?: {
 	paymentMethod?: string;
 }) {
 	try {
-		// Use the userId passed from the client instead of Supabase SSR since it's not configured
+		// Supabase is completely bypassed - using passed userId from Firebase Client Auth
 		const userId = options?.userId
 		if (!userId) throw new Error('Unauthorized')
 
@@ -90,16 +90,16 @@ export async function createPolarCheckout(options?: {
 		for (const itemDoc of itemsSnapshot.docs) {
 			const item = itemDoc.data()
 			const productDoc = await db.collection('products').doc(item.product_id).get()
-			
+
 			if (!productDoc.exists) continue;
-			
+
 			const product = productDoc.data() as ProductType
-			
+
 			const isOnSale = !!product?.discount_price && product.discount_price > 0 && product.discount_price <= 100
 			const currentPrice = isOnSale ? product!.price - (product!.price * (product!.discount_price! / 100)) : product!.price
 
 			totalAmount += currentPrice * item.quantity
-			
+
 			cartItemsData.push({
 				product_id: item.product_id,
 				quantity: item.quantity,
@@ -113,12 +113,14 @@ export async function createPolarCheckout(options?: {
 		if (options?.shippingCharge) {
 			totalAmount += options.shippingCharge
 		}
-		
+
 		const totalAmountInCents = Math.round(totalAmount * 100)
 
-		if (!process.env.POLAR_ACCESS_TOKEN) {
-			console.warn('POLAR_ACCESS_TOKEN is missing. Returning a mock checkout session and creating a local mock order.');
-			
+		if (!process.env.POLAR_ACCESS_TOKEN || options?.paymentMethod === 'Cash on Delivery') {
+			if (!process.env.POLAR_ACCESS_TOKEN && options?.paymentMethod !== 'Cash on Delivery') {
+			    console.warn('POLAR_ACCESS_TOKEN is missing. Returning a mock checkout session and creating a local mock order.');
+			}
+
 			const addressRef = await db.collection('addresses').add({
 				user_id: userId,
 				street: options?.address?.street || '',
@@ -128,7 +130,7 @@ export async function createPolarCheckout(options?: {
 				country: 'US',
 				is_default: false
 			})
-			
+
 			const mockPaymentId = `mock_checkout_${Date.now()}`;
 			const orderRef = await db.collection('orders').add({
 				user_id: userId,
@@ -139,7 +141,7 @@ export async function createPolarCheckout(options?: {
 				shipping_address_id: addressRef.id,
 				created_at: new Date()
 			})
-			
+
 			for (const item of cartItemsData) {
 				await db.collection('order_items').add({
 					order_id: orderRef.id,
@@ -150,12 +152,12 @@ export async function createPolarCheckout(options?: {
 					selectedSize: item.selectedSize || null,
 				})
 			}
-			
+
 			// Delete Cart Items
 			for (const doc of itemsSnapshot.docs) {
 				await doc.ref.delete()
 			}
-			
+
 			return {
 				success: true,
 				checkoutUrl: `${baseUrl}/checkout/success?checkout_id=${mockPaymentId}`,
@@ -211,6 +213,23 @@ export async function createPolarCheckout(options?: {
 			success: false,
 			error: error instanceof Error ? error.message : 'Internal server error',
 		}
+	}
+}
+
+export async function getShippingRatesAction() {
+	try {
+		const snapshot = await db.collection('shipping_rates').get()
+		if (snapshot.empty) {
+			return []
+		}
+		
+		return snapshot.docs.map(doc => ({
+			id: doc.id,
+			...(doc.data() as { state: string, district?: string, charge: number })
+		}))
+	} catch (error) {
+		console.error('Error fetching shipping rates from server:', error)
+		return []
 	}
 }
 

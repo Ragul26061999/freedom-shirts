@@ -21,7 +21,7 @@ export async function updateAddress(
     .single();
 
   if (error) {
-    toast.error('Failed to update address');
+    console.error('Failed to update address');
     throw error;
   }
   return data;

@@ -16,7 +16,7 @@ export async function getCartItems(cartId: string) {
 
     if (error) {
       console.error('Error fetching cart items:', error?.message || JSON.stringify(error));
-      toast.error('Failed to fetch cart items');
+      console.error('Failed to fetch cart items');
       return [];
     }
 
@@ -37,7 +37,7 @@ export async function getCartItems(cartId: string) {
     ) as (CartItemType & { product: ProductType })[];
   } catch (error: any) {
     console.error('Error in getCartItems:', error?.message || error);
-    toast.error('Something went wrong');
+    console.error('Something went wrong');
     return [];
   }
 }

@@ -25,7 +25,7 @@ export async function saveAddress({ address, userId }: SaveAddressParams) {
     .single();
 
   if (error) {
-    toast.error('Failed to save address');
+    console.error('Failed to save address');
     throw error;
   }
   return data;

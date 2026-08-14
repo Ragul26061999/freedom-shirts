@@ -16,14 +16,14 @@ export async function findCartItemByProductId(
 
     if (error && error.code !== 'PGRST116') {
       console.error('Error finding cart item:', error);
-      toast.error('Failed to find cart item');
+      console.error('Failed to find cart item');
       return null;
     }
 
     return data as CartItemType | null;
   } catch (error) {
     console.error('Error in findCartItemByProductId:', error);
-    toast.error('Something went wrong');
+    console.error('Something went wrong');
     return null;
   }
 }

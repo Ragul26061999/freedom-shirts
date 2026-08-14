@@ -38,7 +38,7 @@ export async function createOrder({
     .single();
 
   if (orderError) {
-    toast.error('Failed to create order');
+    console.error('Failed to create order');
     throw orderError;
   }
 
@@ -55,7 +55,7 @@ export async function createOrder({
     .insert(orderItems);
 
   if (itemsError) {
-    toast.error('Failed to create order items');
+    console.error('Failed to create order items');
     throw itemsError;
   }
 

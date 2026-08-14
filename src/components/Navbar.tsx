@@ -21,6 +21,7 @@ import {
   X,
   ChevronDown,
   Mail,
+  RotateCcw,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useCart } from "@/context/CartContext";
@@ -83,9 +84,15 @@ export function Navbar() {
   // Close mobile menu on route change
   useEffect(() => {
     setIsMobileMenuOpen(false);
-    setIsMobileCategoriesOpen(false);
     setIsCategoriesOpen(false);
   }, [pathname]);
+
+  // Auto-open categories when hamburger menu opens
+  useEffect(() => {
+    if (isMobileMenuOpen) {
+      setIsMobileCategoriesOpen(true);
+    }
+  }, [isMobileMenuOpen]);
 
   // Prevent body scroll when mobile menu is open
   useEffect(() => {
@@ -235,6 +242,10 @@ export function Navbar() {
                           <ShoppingCart className="mr-2 h-4 w-4" />
                           <span>Orders</span>
                         </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => router.push("/admin/returns")}>
+                          <RotateCcw className="mr-2 h-4 w-4" />
+                          <span>Returns</span>
+                        </DropdownMenuItem>
                         <DropdownMenuItem onClick={() => router.push("/admin/shipping")}>
                           <Truck className="mr-2 h-4 w-4" />
                           <span>Shipping</span>
@@ -359,17 +370,20 @@ export function Navbar() {
                   <div className="flex items-center gap-3">
                     <LayoutGrid className="h-[18px] w-[18px]" />
                     Categories
+                    <span className="text-[11px] font-normal text-muted-foreground bg-muted rounded-full px-2 py-0.5">
+                      {dynamicCategories.length}
+                    </span>
                   </div>
-                  <ChevronDown className={`h-4 w-4 transition-transform duration-200 ${isMobileCategoriesOpen ? "rotate-180" : ""}`} />
+                  <ChevronDown className={`h-4 w-4 transition-transform duration-300 ${isMobileCategoriesOpen ? "rotate-180" : ""}`} />
                 </button>
 
-                {/* Sub-categories */}
+                {/* Sub-categories grid view */}
                 <div
-                  className={`overflow-hidden transition-all duration-300 ${
-                    isMobileCategoriesOpen ? "max-h-[800px] opacity-100" : "max-h-0 opacity-0"
+                  className={`transition-all duration-300 ease-in-out overflow-hidden ${
+                    isMobileCategoriesOpen ? "max-h-[2000px] opacity-100 mt-2" : "max-h-0 opacity-0"
                   }`}
                 >
-                  <div className="px-4 py-3 grid grid-cols-3 gap-3 bg-muted/30 rounded-xl mx-2 mb-2">
+                  <div className="px-4 pb-4 grid grid-cols-3 gap-x-3 gap-y-4">
                     {dynamicCategories.map((cat) => (
                       <Link
                         key={cat.name}
@@ -377,11 +391,11 @@ export function Navbar() {
                         onClick={() => setIsMobileMenuOpen(false)}
                         className="flex flex-col items-center gap-2 group"
                       >
-                        <div className="w-full aspect-[3/4] bg-white dark:bg-black rounded-lg overflow-hidden flex items-center justify-center border border-border group-hover:border-primary/50 shadow-sm transition-all duration-300">
+                        <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-full bg-muted/50 border border-border/50 flex items-center justify-center overflow-hidden group-hover:border-primary/50 group-hover:shadow-sm transition-all duration-300">
                           {cat.image ? (
                             <img src={cat.image} alt={cat.name} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
                           ) : (
-                            <span className="text-2xl group-hover:scale-110 transition-transform duration-300">{cat.emoji}</span>
+                            <span className="text-xl group-hover:scale-110 transition-transform duration-300">{cat.emoji}</span>
                           )}
                         </div>
                         <span className="text-[11px] font-medium text-center text-muted-foreground group-hover:text-primary leading-tight line-clamp-2">

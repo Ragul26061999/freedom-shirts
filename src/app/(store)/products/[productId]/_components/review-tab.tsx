@@ -76,17 +76,17 @@ export function ReviewTab({ product }: ProductDetailsClientProps) {
 
   const handleSubmitReview = async () => {
     if (!user) {
-      toast.error("Please sign in to leave a review");
+      console.error("Please sign in to leave a review");
       return;
     }
 
     if (rating === 0) {
-      toast.error("Please select a rating");
+      console.error("Please select a rating");
       return;
     }
 
     if (!comment.trim()) {
-      toast.error("Please write a comment");
+      console.error("Please write a comment");
       return;
     }
 

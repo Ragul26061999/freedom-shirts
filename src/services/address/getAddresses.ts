@@ -9,7 +9,7 @@ export async function getAddresses(userId: string) {
     .order('created_at', { ascending: false });
 
   if (error) {
-    toast.error('Failed to fetch addresses');
+    console.error('Failed to fetch addresses');
     throw error;
   }
   return data;

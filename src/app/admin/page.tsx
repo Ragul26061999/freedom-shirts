@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
 import { useAdmin } from "@/hooks/useAdmin";
 import { useAuth } from "@/context/AuthContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -18,7 +17,6 @@ import {
   Activity,
   Settings,
   Archive,
-  Truck,
   RotateCcw,
 } from "lucide-react";
 import { adminProductService } from "@/services/admin/adminProductService";
@@ -50,21 +48,15 @@ interface DashboardStats {
 export default function AdminDashboard() {
   const { user } = useAuth();
   const { isAdmin, loading: adminLoading, error: adminError } = useAdmin();
-  const router = useRouter();
 
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!adminLoading && !isAdmin) {
-      router.push("/dashboard");
-      return;
-    }
-
     if (isAdmin) {
       fetchDashboardData();
     }
-  }, [isAdmin, adminLoading, router]);
+  }, [isAdmin]);
 
   const fetchDashboardData = async () => {
     try {
@@ -159,105 +151,131 @@ export default function AdminDashboard() {
         </Badge>
       </div>
 
-      {/* Overview Stats Cards */}
-      <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-4">
-        <Card>
+      {/* Overview Stats Cards (Pastel Scheme) */}
+      <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
+        {/* Total Revenue - Pastel Mint/Emerald */}
+        <Card className="relative overflow-hidden border border-emerald-500/20 bg-gradient-to-br from-emerald-50/90 via-teal-50/50 to-emerald-100/40 dark:from-emerald-950/40 dark:via-emerald-900/20 dark:to-teal-950/30 shadow-xs hover:shadow-md transition-all duration-300">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Revenue</CardTitle>
-            <IndianRupee className="text-muted-foreground h-4 w-4" />
+            <CardTitle className="text-sm font-semibold text-emerald-950 dark:text-emerald-200">
+              Total Revenue 
+            </CardTitle>
+            <div className="p-2 rounded-xl bg-emerald-500/15 text-emerald-600 dark:text-emerald-400">
+              <IndianRupee className="h-4 w-4" />
+            </div>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">
+            <div className="text-2xl sm:text-3xl font-extrabold text-emerald-950 dark:text-emerald-100 tracking-tight">
               {formatCurrency(stats.orders.revenue)}
             </div>
-            <p className="text-muted-foreground text-xs">
+            <p className="text-xs font-medium text-emerald-700/80 dark:text-emerald-300/80 mt-1">
               {stats.orders.total} total orders
             </p>
           </CardContent>
         </Card>
 
-        <Card>
+        {/* Total Products - Pastel Sky/Blue */}
+        <Card className="relative overflow-hidden border border-sky-500/20 bg-gradient-to-br from-sky-50/90 via-blue-50/50 to-indigo-100/40 dark:from-sky-950/40 dark:via-sky-900/20 dark:to-indigo-950/30 shadow-xs hover:shadow-md transition-all duration-300">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">
+            <CardTitle className="text-sm font-semibold text-sky-950 dark:text-sky-200">
               Total Products
             </CardTitle>
-            <Package className="text-muted-foreground h-4 w-4" />
+            <div className="p-2 rounded-xl bg-sky-500/15 text-sky-600 dark:text-sky-400">
+              <Package className="h-4 w-4" />
+            </div>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats.products.total}</div>
-            <p className="text-muted-foreground text-xs">
-              {stats.products.lowStock} low stock
+            <div className="text-2xl sm:text-3xl font-extrabold text-sky-950 dark:text-sky-100 tracking-tight">
+              {stats.products.total}
+            </div>
+            <p className="text-xs font-medium text-sky-700/80 dark:text-sky-300/80 mt-1">
+              {stats.products.lowStock > 0 ? (
+                <span className="text-amber-600 font-semibold">{stats.products.lowStock} low stock</span>
+              ) : (
+                <span>0 low stock</span>
+              )}
             </p>
           </CardContent>
         </Card>
 
-        <Card>
+        {/* Total Users - Pastel Violet/Purple */}
+        <Card className="relative overflow-hidden border border-purple-500/20 bg-gradient-to-br from-purple-50/90 via-fuchsia-50/50 to-violet-100/40 dark:from-purple-950/40 dark:via-purple-900/20 dark:to-violet-950/30 shadow-xs hover:shadow-md transition-all duration-300">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Users</CardTitle>
-            <Users className="text-muted-foreground h-4 w-4" />
+            <CardTitle className="text-sm font-semibold text-purple-950 dark:text-purple-200">
+              Total Users
+            </CardTitle>
+            <div className="p-2 rounded-xl bg-purple-500/15 text-purple-600 dark:text-purple-400">
+              <Users className="h-4 w-4" />
+            </div>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats.users.total}</div>
-            <p className="text-muted-foreground text-xs">
+            <div className="text-2xl sm:text-3xl font-extrabold text-purple-950 dark:text-purple-100 tracking-tight">
+              {stats.users.total}
+            </div>
+            <p className="text-xs font-medium text-purple-700/80 dark:text-purple-300/80 mt-1">
               {stats.users.active} active this month
             </p>
           </CardContent>
         </Card>
 
-        <Card>
+        {/* Pending Orders - Pastel Amber/Gold */}
+        <Card className="relative overflow-hidden border border-amber-500/20 bg-gradient-to-br from-amber-50/90 via-orange-50/50 to-yellow-100/40 dark:from-amber-950/40 dark:via-amber-900/20 dark:to-orange-950/30 shadow-xs hover:shadow-md transition-all duration-300">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">
+            <CardTitle className="text-sm font-semibold text-amber-950 dark:text-amber-200">
               Pending Orders
             </CardTitle>
-            <ShoppingCart className="text-muted-foreground h-4 w-4" />
+            <div className="p-2 rounded-xl bg-amber-500/15 text-amber-600 dark:text-amber-400">
+              <ShoppingCart className="h-4 w-4" />
+            </div>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats.orders.pending}</div>
-            <p className="text-muted-foreground text-xs">Need attention</p>
+            <div className="text-2xl sm:text-3xl font-extrabold text-amber-950 dark:text-amber-100 tracking-tight">
+              {stats.orders.pending}
+            </div>
+            <p className="text-xs font-medium text-amber-700/80 dark:text-amber-300/80 mt-1">
+              {stats.orders.pending > 0 ? (
+                <span className="text-amber-600 font-semibold">Need attention</span>
+              ) : (
+                <span>Need attention</span>
+              )}
+            </p>
           </CardContent>
         </Card>
       </div>
 
       {/* Quick Actions */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Quick Actions</CardTitle>
+      <Card className="border-border/70 shadow-xs">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base font-semibold">Quick Actions</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-6">
+          <div className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3 lg:grid-cols-5">
             <Link href="/admin/products">
-              <Button className="w-full cursor-pointer" variant="outline">
-                <Package className="mr-2 h-4 w-4" />
+              <Button className="w-full cursor-pointer font-medium hover:bg-primary/10 hover:text-primary hover:border-primary/40 transition-all duration-200" variant="outline">
+                <Package className="mr-2 h-4 w-4 text-primary" />
                 Products
               </Button>
             </Link>
             <Link href="/admin/orders">
-              <Button className="w-full cursor-pointer" variant="outline">
-                <ShoppingCart className="mr-2 h-4 w-4" />
+              <Button className="w-full cursor-pointer font-medium hover:bg-primary/10 hover:text-primary hover:border-primary/40 transition-all duration-200" variant="outline">
+                <ShoppingCart className="mr-2 h-4 w-4 text-primary" />
                 Orders
               </Button>
             </Link>
             <Link href="/admin/users">
-              <Button className="w-full cursor-pointer" variant="outline">
-                <Users className="mr-2 h-4 w-4" />
+              <Button className="w-full cursor-pointer font-medium hover:bg-primary/10 hover:text-primary hover:border-primary/40 transition-all duration-200" variant="outline">
+                <Users className="mr-2 h-4 w-4 text-primary" />
                 Users
               </Button>
             </Link>
             <Link href="/admin/inventory">
-              <Button className="w-full cursor-pointer bg-primary text-primary-foreground hover:bg-primary/90" variant="outline">
-                <Archive className="mr-2 h-4 w-4" />
+              <Button className="w-full cursor-pointer font-medium hover:bg-primary/10 hover:text-primary hover:border-primary/40 transition-all duration-200" variant="outline">
+                <Archive className="mr-2 h-4 w-4 text-primary" />
                 Inventory
               </Button>
             </Link>
-            <Link href="/admin/purchases">
-              <Button className="w-full cursor-pointer bg-primary text-primary-foreground hover:bg-primary/90" variant="outline">
-                <Truck className="mr-2 h-4 w-4" />
-                Purchases
-              </Button>
-            </Link>
             <Link href="/admin/returns">
-              <Button className="w-full cursor-pointer bg-primary text-primary-foreground hover:bg-primary/90" variant="outline">
-                <RotateCcw className="mr-2 h-4 w-4" />
+              <Button className="w-full cursor-pointer font-medium hover:bg-primary/10 hover:text-primary hover:border-primary/40 transition-all duration-200" variant="outline">
+                <RotateCcw className="mr-2 h-4 w-4 text-primary" />
                 Returns
               </Button>
             </Link>

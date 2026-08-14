@@ -18,7 +18,7 @@ export async function getOrders(userId: string) {
     .order('created_at', { ascending: false });
 
   if (error) {
-    toast.error('Failed to fetch orders');
+    console.error('Failed to fetch orders');
     throw error;
   }
   return data;

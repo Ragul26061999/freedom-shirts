@@ -1,4 +1,3 @@
-import { redirect } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -18,7 +17,6 @@ import {
 
 import { format, formatDistanceToNow } from "date-fns";
 import { AdminUsersClient } from "./AdminUsersClient";
-import { getCurrentUser } from "@/services/auth/authServerService";
 import {
   adminUserServerService,
   UserFilters,
@@ -44,10 +42,6 @@ export default async function AdminUsersPage({
   searchParams,
 }: AdminUsersPageProps) {
   const resolvedSearchParams = await searchParams;
-  const currentUser = await getCurrentUser();
-  if (!currentUser || currentUser.role !== "admin") {
-    redirect("/signin");
-  }
 
   const filters: UserFilters = {
     searchTerm: getParam(resolvedSearchParams.search),

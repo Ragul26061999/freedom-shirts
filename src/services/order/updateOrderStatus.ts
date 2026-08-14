@@ -10,7 +10,7 @@ export async function updateOrderStatus(orderId: string, status: string) {
     .single();
 
   if (error) {
-    toast.error('Failed to update order status');
+    console.error('Failed to update order status');
     throw error;
   }
   return data;

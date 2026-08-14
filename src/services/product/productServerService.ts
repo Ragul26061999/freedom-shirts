@@ -1,5 +1,4 @@
-import { db } from '@/lib/firebase/client';
-import { collection, doc, getDoc, getDocs, query, where } from 'firebase/firestore';
+import { db } from '@/lib/firebase/admin';
 import { ProductType } from '@/types';
 
 // Helper for dates
@@ -8,18 +7,18 @@ const serializeDate = (val: any) => val && typeof val.toDate === 'function' ? va
 export const productServerService = {
   async getProducts(): Promise<ProductType[]> {
     try {
-      const snapshot = await getDocs(collection(db, 'products'));
-      
+      const snapshot = await db.collection("products").orderBy("title").get();
+
       const products = await Promise.all(snapshot.docs.map(async (docSnap) => {
         const data = docSnap.data();
         let category = null;
 
         if (data.category_id) {
-          const catDoc = await getDoc(doc(db, "categories", String(data.category_id)));
-          if (catDoc.exists()) {
+          const catDoc = await db.collection("categories").doc(String(data.category_id)).get();
+          if (catDoc.exists) {
             category = {
               id: Number(catDoc.id),
-              name: catDoc.data().name
+              name: catDoc.data()!.name
             };
           }
         }
@@ -36,9 +35,7 @@ export const productServerService = {
       }));
 
       const now = new Date();
-      return products
-        .sort((a, b) => (a.title || '').localeCompare(b.title || ''))
-        .filter(p => !p.expiry_date || new Date(p.expiry_date) >= now);
+      return products.filter(p => !p.expiry_date || new Date(p.expiry_date) >= now);
     } catch (err) {
       console.error("Failed to get all products:", err);
       return [];
@@ -47,20 +44,18 @@ export const productServerService = {
 
   async getProductById(id: string): Promise<ProductType | null> {
     try {
-      const docRef = doc(db, 'products', id);
-      const docSnap = await getDoc(docRef);
+      const docSnap = await db.collection("products").doc(id).get();
+      if (!docSnap.exists) return null;
 
-      if (!docSnap.exists()) return null;
-
-      const data = docSnap.data();
+      const data = docSnap.data()!;
       let category = null;
 
       if (data.category_id) {
-        const catDoc = await getDoc(doc(db, "categories", String(data.category_id)));
-        if (catDoc.exists()) {
+        const catDoc = await db.collection("categories").doc(String(data.category_id)).get();
+        if (catDoc.exists) {
           category = {
             id: Number(catDoc.id),
-            name: catDoc.data().name
+            name: catDoc.data()!.name
           };
         }
       }
@@ -88,19 +83,20 @@ export const productServerService = {
 
   async getProductsByCategory(categoryId: number | string): Promise<ProductType[]> {
     try {
-      const q = query(collection(db, 'products'), where('category_id', 'in', [Number(categoryId), String(categoryId)]));
-      const snapshot = await getDocs(q);
-        
+      const snapshot = await db.collection("products")
+        .where("category_id", "in", [Number(categoryId), String(categoryId)])
+        .get();
+
       const products = await Promise.all(snapshot.docs.map(async (docSnap) => {
         const data = docSnap.data();
         let category = null;
 
         if (data.category_id) {
-          const catDoc = await getDoc(doc(db, "categories", String(data.category_id)));
-          if (catDoc.exists()) {
+          const catDoc = await db.collection("categories").doc(String(data.category_id)).get();
+          if (catDoc.exists) {
             category = {
               id: Number(catDoc.id),
-              name: catDoc.data().name
+              name: catDoc.data()!.name
             };
           }
         }
@@ -124,9 +120,9 @@ export const productServerService = {
     }
   },
 
-  async searchProducts(queryStr: string): Promise<ProductType[]> {
+  async searchProducts(query: string): Promise<ProductType[]> {
     const allProducts = await this.getProducts();
-    const q = queryStr.toLowerCase();
-    return allProducts.filter(p => p.title && p.title.toLowerCase().includes(q));
+    const q = query.toLowerCase();
+    return allProducts.filter(p => p.title.toLowerCase().includes(q));
   }
 };

@@ -17,7 +17,7 @@ export function CategoryBar() {
         name: cat.name,
         emoji: cat.description && cat.description.startsWith('http') ? null : "🛍️",
         image: cat.description && cat.description.startsWith('http') ? cat.description : null,
-        href: `/?category=${cat.id}`,
+        href: `/?category=${cat.id}#products`,
       }))
     : [];
 

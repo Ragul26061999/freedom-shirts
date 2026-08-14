@@ -128,7 +128,7 @@ export const orderService = {
           details: orderError?.details,
           hint: orderError?.hint,
         });
-        toast.error(
+        console.error(
           `Failed to create order: ${orderError?.message ?? "Unknown error"}`,
         );
         throw new Error(
@@ -158,7 +158,7 @@ export const orderService = {
 
       if (itemsError) {
         console.error("Order items creation error:", itemsError);
-        toast.error(`Failed to create order items: ${itemsError.message}`);
+        console.error(`Failed to create order items: ${itemsError.message}`);
 
         // Try to clean up the order if items creation failed
         try {
@@ -231,7 +231,7 @@ export const orderService = {
       .order("created_at", { ascending: false });
 
     if (error) {
-      toast.error("Failed to fetch orders");
+      console.error("Failed to fetch orders");
       throw error;
     }
     return data;
@@ -254,7 +254,7 @@ export const orderService = {
       .single();
 
     if (error) {
-      toast.error("Failed to fetch order");
+      console.error("Failed to fetch order");
       throw error;
     }
     return data;
@@ -269,7 +269,7 @@ export const orderService = {
       .single();
 
     if (error) {
-      toast.error("Failed to update order status");
+      console.error("Failed to update order status");
       throw error;
     }
     return data;
@@ -280,7 +280,7 @@ export const orderService = {
     const { error } = await supabase.from("orders").delete().eq("id", orderId);
 
     if (error) {
-      toast.error("Failed to delete order");
+      console.error("Failed to delete order");
       throw error;
     }
     return true;
@@ -298,7 +298,7 @@ export const orderService = {
       .single();
 
     if (error) {
-      toast.error("Failed to cancel order");
+      console.error("Failed to cancel order");
       throw error;
     }
     return data;

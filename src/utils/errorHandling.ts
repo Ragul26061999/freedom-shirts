@@ -82,7 +82,7 @@ export function handleCommonErrors(
     if (isNoRowsError(error)) {
       if (!silentOnNoRows) {
         console.warn(`No rows returned for ${context}`);
-        if (showToast) toast.error(`No data found.`);
+        if (showToast) console.error(`No data found.`);
       }
       return true;
     }
@@ -90,27 +90,27 @@ export function handleCommonErrors(
     if (isRLSViolationError(error)) {
       console.error(`RLS violation in ${context}:`, error);
       if (showToast) {
-        toast.error('Permission denied to access this data.');
+        console.error('Permission denied to access this data.');
       }
       return true;
     }
 
     // Generic Postgrest error
     console.error(`Database error in ${context}:`, error);
-    if (showToast) toast.error(`Database error: ${error.message}`);
+    if (showToast) console.error(`Database error: ${error.message}`);
     return true;
   }
 
   // Handle other error types
   if (error instanceof Error) {
     console.error(`Error in ${context}:`, error);
-    if (showToast) toast.error(error.message || 'An error occurred');
+    if (showToast) console.error(error.message || 'An error occurred');
     return true;
   }
 
   // Unknown error format
   console.error(`Unknown error in ${context}:`, error);
-  if (showToast) toast.error('An unexpected error occurred');
+  if (showToast) console.error('An unexpected error occurred');
   return true;
 }
 

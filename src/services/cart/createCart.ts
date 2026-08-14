@@ -21,14 +21,14 @@ export async function createCart() {
 
     if (error) {
       console.error('Error creating cart:', error);
-      toast.error('Failed to create cart');
+      console.error('Failed to create cart');
       return null;
     }
 
     return data as CartType;
   } catch (error) {
     console.error('Error in createCart:', error);
-    toast.error('Something went wrong');
+    console.error('Something went wrong');
     return null;
   }
 }

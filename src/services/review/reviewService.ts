@@ -45,7 +45,7 @@ export const reviewService = {
       return reviews;
     } catch (error: any) {
       console.error('Error fetching reviews:', error);
-      toast.error(error.message || 'Failed to fetch reviews');
+      console.error(error.message || 'Failed to fetch reviews');
       return [];
     }
   },
@@ -77,7 +77,7 @@ export const reviewService = {
       } as unknown as ReviewType;
     } catch (error) {
       console.error('Error fetching review:', error);
-      toast.error('Failed to fetch review');
+      console.error('Failed to fetch review');
       return null;
     }
   },
@@ -90,7 +90,7 @@ export const reviewService = {
     try {
       const user = auth.currentUser;
       if (!user) {
-        toast.error('You must be logged in to leave a review');
+        console.error('You must be logged in to leave a review');
         return null;
       }
       
@@ -120,7 +120,7 @@ export const reviewService = {
       } as unknown as ReviewType;
     } catch (error: any) {
       console.error('Error creating review:', error);
-      toast.error(error.message || 'Failed to create review');
+      console.error(error.message || 'Failed to create review');
       return null;
     }
   },
@@ -133,7 +133,7 @@ export const reviewService = {
     try {
       const user = auth.currentUser;
       if (!user) {
-        toast.error('You must be logged in to update a review');
+        console.error('You must be logged in to update a review');
         return null;
       }
       
@@ -141,7 +141,7 @@ export const reviewService = {
       const reviewSnap = await getDoc(reviewRef);
       
       if (!reviewSnap.exists() || reviewSnap.data()?.user_id !== user.uid) {
-        toast.error('Not authorized to update this review');
+        console.error('Not authorized to update this review');
         return null;
       }
       
@@ -161,7 +161,7 @@ export const reviewService = {
       } as unknown as ReviewType;
     } catch (error) {
       console.error('Error updating review:', error);
-      toast.error('Something went wrong');
+      console.error('Something went wrong');
       return null;
     }
   },
@@ -170,7 +170,7 @@ export const reviewService = {
     try {
       const user = auth.currentUser;
       if (!user) {
-        toast.error('You must be logged in to delete a review');
+        console.error('You must be logged in to delete a review');
         return false;
       }
       
@@ -178,7 +178,7 @@ export const reviewService = {
       const reviewSnap = await getDoc(reviewRef);
       
       if (!reviewSnap.exists() || reviewSnap.data()?.user_id !== user.uid) {
-        toast.error('Not authorized to delete this review');
+        console.error('Not authorized to delete this review');
         return false;
       }
       
@@ -186,7 +186,7 @@ export const reviewService = {
       return true;
     } catch (error) {
       console.error('Error deleting review:', error);
-      toast.error('Something went wrong');
+      console.error('Something went wrong');
       return false;
     }
   }

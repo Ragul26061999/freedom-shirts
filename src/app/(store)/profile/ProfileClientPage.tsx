@@ -57,7 +57,7 @@ export default function ProfileClientPage({
       toast.success("Profile updated successfully");
     } catch (error) {
       console.error("Error updating profile:", error);
-      toast.error("Failed to update profile");
+      console.error("Failed to update profile");
     } finally {
       setIsSaving(false);
     }
@@ -76,7 +76,7 @@ export default function ProfileClientPage({
       );
     } catch (error) {
       console.error("Error updating email:", error);
-      toast.error(
+      console.error(
         error instanceof Error ? error.message : "Failed to update email",
       );
       throw error;

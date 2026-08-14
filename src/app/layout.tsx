@@ -33,10 +33,8 @@ export default function RootLayout({
     <html lang="en" suppressHydrationWarning className={cn("font-sans", inter.variable, playfair.variable)}>
       <head>
         <link rel="icon" type="image/svg+xml" href="/icon.svg" />
-        <title>FSC – Freedom Shirt Company</title>
-        <meta name="description" content="Crafted with precision. Premium quality shirts, custom tailoring, and timeless fashion for the modern gentleman." />
       </head>
-      <body className="bg-background min-h-screen flex flex-col">
+      <body suppressHydrationWarning className="bg-background min-h-screen flex flex-col">
         <ErrorBoundary>
           <TanStackQueryProvider>
             <AuthProvider>

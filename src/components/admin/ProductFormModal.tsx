@@ -293,7 +293,7 @@ export function ProductFormModal({
       await onSubmit(submitData);
     } catch (error) {
       console.error("Error submitting product:", error);
-      toast.error("Failed to save product.");
+      console.error("Failed to save product.");
     } finally {
       setLoading(false);
       setUploadingImage(false);
@@ -330,7 +330,7 @@ export function ProductFormModal({
 
     const validFiles = files.filter(f => {
       if (f.size > 20 * 1024 * 1024) {
-        toast.error(`${f.name} exceeds 20MB limit`);
+        console.error(`${f.name} exceeds 20MB limit`);
         return false;
       }
       return true;
@@ -393,7 +393,7 @@ export function ProductFormModal({
       setNewCategoryImage("");
       setPendingCategoryImage(null);
     } catch (error) {
-      toast.error("Failed to create category");
+      console.error("Failed to create category");
     } finally {
       setCreatingCategoryLoading(false);
     }
@@ -404,7 +404,7 @@ export function ProductFormModal({
     if (!file) return;
     
     if (file.size > 20 * 1024 * 1024) {
-      toast.error("Image must be less than 20MB");
+      console.error("Image must be less than 20MB");
       e.target.value = '';
       return;
     }
@@ -427,7 +427,7 @@ export function ProductFormModal({
     if (!file) return;
 
     if (file.size > 20 * 1024 * 1024) {
-      toast.error("Category image must be less than 20MB");
+      console.error("Category image must be less than 20MB");
       e.target.value = '';
       return;
     }

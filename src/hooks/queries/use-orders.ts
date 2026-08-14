@@ -1,4 +1,5 @@
 import { orderService } from '@/services/order/orderService'
+import { getOrders } from '@/services/order/orderServerService'
 import { OrderType } from '@/types'
 import {
 	useQuery,
@@ -23,7 +24,7 @@ export function useOrders(
 ) {
 	return useQuery({
 		queryKey: orderKeys.list(userId),
-		queryFn: () => orderService.getOrders(userId),
+		queryFn: () => getOrders(userId),
 		enabled: !!userId,
 		staleTime: 5 * 60 * 1000,
 		retry: (failureCount, error) => {

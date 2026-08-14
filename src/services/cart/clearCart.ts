@@ -10,14 +10,14 @@ export async function clearCart(cartId: number) {
 
     if (error) {
       console.error('Error clearing cart:', error);
-      toast.error('Failed to clear cart');
+      console.error('Failed to clear cart');
       return false;
     }
 
     return true;
   } catch (error) {
     console.error('Error in clearCart:', error);
-    toast.error('Something went wrong');
+    console.error('Something went wrong');
     return false;
   }
 }

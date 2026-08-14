@@ -2,8 +2,16 @@
 
 import { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Package, AlertTriangle, XCircle, ArrowUpFromLine, Clock } from 'lucide-react';
+import { Package, AlertTriangle, XCircle, ArrowUpFromLine, Clock, Search, Filter } from 'lucide-react';
 import { LoadingSpinner } from '@/components/LoadingSpinner';
+import { Input } from '@/components/ui/input';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { adminProductService, ProductWithDetails } from '@/services/admin/adminProductService';
 import { formatCurrency } from '@/utils/formatCurrency';
 import { Badge } from '@/components/ui/badge';
@@ -33,6 +41,10 @@ export default function InventoryDashboard() {
   const [loading, setLoading] = useState(true);
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<ProductWithDetails | null>(null);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [categoryFilter, setCategoryFilter] = useState('all');
+  const [valueFilter, setValueFilter] = useState('all');
 
   useEffect(() => {
     fetchInventoryData();
@@ -98,56 +110,109 @@ export default function InventoryDashboard() {
     .filter((p) => p.daysToExpiry <= 90)
     .sort((a, b) => a.daysToExpiry - b.daysToExpiry);
 
+  const categories = Array.from(new Set(products.map(p => p.category?.name).filter(Boolean))) as string[];
+
+  const filteredProducts = products.filter(product => {
+    const matchesSearch = product.title.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                          (product.sku && product.sku.toLowerCase().includes(searchTerm.toLowerCase()));
+    
+    if (!matchesSearch) return false;
+    
+    if (statusFilter !== 'all') {
+      if (statusFilter === 'in_stock' && product.stock < 10) return false;
+      if (statusFilter === 'low_stock' && (product.stock <= 0 || product.stock >= 10)) return false;
+      if (statusFilter === 'out_of_stock' && product.stock > 0) return false;
+    }
+
+    if (categoryFilter !== 'all' && product.category?.name !== categoryFilter) return false;
+
+    if (valueFilter !== 'all') {
+      if (valueFilter === 'under_500' && product.price >= 500) return false;
+      if (valueFilter === '500_1000' && (product.price < 500 || product.price > 1000)) return false;
+      if (valueFilter === 'over_1000' && product.price <= 1000) return false;
+    }
+    
+    return true;
+  });
+
   return (
     <div className="space-y-4">
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <Card>
+        {/* Available Stock - Pastel Sky/Blue */}
+        <Card className="relative overflow-hidden border border-sky-500/20 bg-gradient-to-br from-sky-50/90 via-blue-50/50 to-indigo-100/40 dark:from-sky-950/40 dark:via-sky-900/20 dark:to-indigo-950/30 shadow-xs hover:shadow-md transition-all duration-300">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Available Stock</CardTitle>
-            <Package className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-semibold text-sky-950 dark:text-sky-200">
+              Available Stock
+            </CardTitle>
+            <div className="p-2 rounded-xl bg-sky-500/15 text-sky-600 dark:text-sky-400">
+              <Package className="h-4 w-4" />
+            </div>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats.availableStock}</div>
-            <p className="text-xs text-muted-foreground">
+            <div className="text-2xl sm:text-3xl font-extrabold text-sky-950 dark:text-sky-100 tracking-tight">
+              {stats.availableStock}
+            </div>
+            <p className="text-xs font-medium text-sky-700/80 dark:text-sky-300/80 mt-1">
               Total value: {formatCurrency(stats.inventoryValue)}
             </p>
           </CardContent>
         </Card>
 
-        <Card>
+        {/* Reserved Stock - Pastel Purple/Violet */}
+        <Card className="relative overflow-hidden border border-purple-500/20 bg-gradient-to-br from-purple-50/90 via-fuchsia-50/50 to-violet-100/40 dark:from-purple-950/40 dark:via-purple-900/20 dark:to-violet-950/30 shadow-xs hover:shadow-md transition-all duration-300">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Reserved Stock</CardTitle>
-            <ArrowUpFromLine className="h-4 w-4 text-orange-500" />
+            <CardTitle className="text-sm font-semibold text-purple-950 dark:text-purple-200">
+              Reserved Stock
+            </CardTitle>
+            <div className="p-2 rounded-xl bg-purple-500/15 text-purple-600 dark:text-purple-400">
+              <ArrowUpFromLine className="h-4 w-4" />
+            </div>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats.reservedStock}</div>
-            <p className="text-xs text-muted-foreground">
+            <div className="text-2xl sm:text-3xl font-extrabold text-purple-950 dark:text-purple-100 tracking-tight">
+              {stats.reservedStock}
+            </div>
+            <p className="text-xs font-medium text-purple-700/80 dark:text-purple-300/80 mt-1">
               Pending order shipments
             </p>
           </CardContent>
         </Card>
 
-        <Card>
+        {/* Low Stock Alerts - Pastel Amber/Orange */}
+        <Card className="relative overflow-hidden border border-amber-500/20 bg-gradient-to-br from-amber-50/90 via-orange-50/50 to-yellow-100/40 dark:from-amber-950/40 dark:via-amber-900/20 dark:to-orange-950/30 shadow-xs hover:shadow-md transition-all duration-300">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Low Stock Alerts</CardTitle>
-            <AlertTriangle className="h-4 w-4 text-yellow-500" />
+            <CardTitle className="text-sm font-semibold text-amber-950 dark:text-amber-200">
+              Low Stock Alerts
+            </CardTitle>
+            <div className="p-2 rounded-xl bg-amber-500/15 text-amber-600 dark:text-amber-400">
+              <AlertTriangle className="h-4 w-4" />
+            </div>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats.lowStock}</div>
-            <p className="text-xs text-muted-foreground">
+            <div className="text-2xl sm:text-3xl font-extrabold text-amber-950 dark:text-amber-100 tracking-tight">
+              {stats.lowStock}
+            </div>
+            <p className="text-xs font-medium text-amber-700/80 dark:text-amber-300/80 mt-1">
               Products near reorder level
             </p>
           </CardContent>
         </Card>
 
-        <Card>
+        {/* Out of Stock - Pastel Rose/Red */}
+        <Card className="relative overflow-hidden border border-rose-500/20 bg-gradient-to-br from-rose-50/90 via-red-50/50 to-pink-100/40 dark:from-rose-950/40 dark:via-rose-900/20 dark:to-pink-950/30 shadow-xs hover:shadow-md transition-all duration-300">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Out of Stock</CardTitle>
-            <XCircle className="h-4 w-4 text-red-500" />
+            <CardTitle className="text-sm font-semibold text-rose-950 dark:text-rose-200">
+              Out of Stock
+            </CardTitle>
+            <div className="p-2 rounded-xl bg-rose-500/15 text-rose-600 dark:text-rose-400">
+              <XCircle className="h-4 w-4" />
+            </div>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats.outOfStock}</div>
-            <p className="text-xs text-muted-foreground">
+            <div className="text-2xl sm:text-3xl font-extrabold text-rose-950 dark:text-rose-100 tracking-tight">
+              {stats.outOfStock}
+            </div>
+            <p className="text-xs font-medium text-rose-700/80 dark:text-rose-300/80 mt-1">
               Requires immediate purchase
             </p>
           </CardContent>
@@ -209,8 +274,62 @@ export default function InventoryDashboard() {
       )}
 
       <Card>
-        <CardHeader>
+        <CardHeader className="flex flex-col md:flex-row md:items-center justify-between space-y-4 md:space-y-0 pb-6">
           <CardTitle>Live Product Inventory</CardTitle>
+          <div className="flex flex-col sm:flex-row flex-wrap gap-3">
+            <div className="relative w-full sm:w-64">
+              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Input
+                type="text"
+                placeholder="Search products or SKU..."
+                className="pl-8 bg-background"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+              />
+            </div>
+            <Select value={categoryFilter} onValueChange={(val) => setCategoryFilter(val || 'all')}>
+              <SelectTrigger className="w-full sm:w-[160px] bg-background">
+                <div className="flex items-center">
+                  <Filter className="mr-2 h-4 w-4 text-muted-foreground" />
+                  <SelectValue placeholder="Category" />
+                </div>
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Categories</SelectItem>
+                {categories.map(cat => (
+                  <SelectItem key={cat} value={cat}>{cat}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={valueFilter} onValueChange={(val) => setValueFilter(val || 'all')}>
+              <SelectTrigger className="w-full sm:w-[160px] bg-background">
+                <div className="flex items-center">
+                  <Filter className="mr-2 h-4 w-4 text-muted-foreground" />
+                  <SelectValue placeholder="Value" />
+                </div>
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Prices</SelectItem>
+                <SelectItem value="under_500">Under ₹500</SelectItem>
+                <SelectItem value="500_1000">₹500 - ₹1000</SelectItem>
+                <SelectItem value="over_1000">Over ₹1000</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select value={statusFilter} onValueChange={(val) => setStatusFilter(val || 'all')}>
+              <SelectTrigger className="w-full sm:w-[160px] bg-background">
+                <div className="flex items-center">
+                  <Filter className="mr-2 h-4 w-4 text-muted-foreground" />
+                  <SelectValue placeholder="Status" />
+                </div>
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Statuses</SelectItem>
+                <SelectItem value="in_stock">In Stock</SelectItem>
+                <SelectItem value="low_stock">Low Stock</SelectItem>
+                <SelectItem value="out_of_stock">Out of Stock</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
         </CardHeader>
         <CardContent>
           <Table>
@@ -226,7 +345,7 @@ export default function InventoryDashboard() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {products.map((product) => (
+              {filteredProducts.map((product) => (
                 <TableRow 
                   key={product.product_id}
                   className="cursor-pointer hover:bg-muted/50"
@@ -254,7 +373,7 @@ export default function InventoryDashboard() {
                   </TableCell>
                 </TableRow>
               ))}
-              {products.length === 0 && (
+              {filteredProducts.length === 0 && (
                 <TableRow>
                   <TableCell colSpan={7} className="h-24 text-center">
                     No products found.

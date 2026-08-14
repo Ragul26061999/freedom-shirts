@@ -80,7 +80,7 @@ export function ProfileCard({
     // Check file size (max 2MB)
     const maxSize = 2 * 1024 * 1024; // 2MB
     if (file.size > maxSize) {
-      toast.error(
+      console.error(
         `File size exceeds 2MB limit (${(file.size / (1024 * 1024)).toFixed(
           2,
         )}MB)`,
@@ -91,7 +91,7 @@ export function ProfileCard({
     // Check file type
     const validTypes = ["image/jpeg", "image/png", "image/gif", "image/webp"];
     if (!validTypes.includes(file.type)) {
-      toast.error("Please upload a valid image file (JPEG, PNG, GIF, or WEBP)");
+      console.error("Please upload a valid image file (JPEG, PNG, GIF, or WEBP)");
       return;
     }
 
@@ -137,9 +137,9 @@ export function ProfileCard({
 
       // Provide a user-friendly error message
       if (error instanceof Error) {
-        toast.error(error.message);
+        console.error(error.message);
       } else {
-        toast.error("Failed to upload avatar. Please try again later.");
+        console.error("Failed to upload avatar. Please try again later.");
       }
     } finally {
       setUploading(false);

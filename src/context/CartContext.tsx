@@ -77,7 +77,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
         }
       } catch (error) {
         console.error('Error loading cart:', error);
-        toast.error('Failed to load your cart');
+        console.error('Failed to load your cart');
       } finally {
         setIsLoading(false);
       }
@@ -106,14 +106,14 @@ export function CartProvider({ children }: { children: ReactNode }) {
 
   const addToCart = async (product: ProductType) => {
     if (!user) {
-      toast.error('Please login to add items to cart');
+      console.error('Please login to add items to cart');
       return;
     }
 
     if (!activeCartId) {
       const cart = await cartService.createCart();
       if (!cart) {
-        toast.error('Failed to create cart');
+        console.error('Failed to create cart');
         return;
       }
       setActiveCartId(cart.id);
@@ -163,7 +163,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
       }
     } catch (error) {
       console.error('Error adding to cart:', error);
-      toast.error('Failed to add item to cart');
+      console.error('Failed to add item to cart');
     }
   };
 
@@ -192,7 +192,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
       }
     } catch (error) {
       console.error('Error removing from cart:', error);
-      toast.error('Failed to remove item from cart');
+      console.error('Failed to remove item from cart');
     }
   };
 
@@ -233,7 +233,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
       }
     } catch (error) {
       console.error('Error updating quantity:', error);
-      toast.error('Failed to update quantity');
+      console.error('Failed to update quantity');
     }
   };
 
@@ -249,7 +249,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
       }
     } catch (error) {
       console.error('Error clearing cart:', error);
-      toast.error('Failed to clear cart');
+      console.error('Failed to clear cart');
     }
   };
 

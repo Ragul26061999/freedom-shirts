@@ -18,7 +18,7 @@ export async function getOrderById(orderId: string) {
     .single();
 
   if (error) {
-    toast.error('Failed to fetch order');
+    console.error('Failed to fetch order');
     throw error;
   }
   return data;

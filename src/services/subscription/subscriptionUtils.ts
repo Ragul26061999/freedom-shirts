@@ -30,26 +30,26 @@ export function handleSubscriptionStatus(
       console.error(
         "Error is undefined - this usually indicates realtime authentication issues",
       );
-      toast.error(
+      console.error(
         `${subscriptionName} connection failed - please check your connection and try refreshing`,
       );
       return;
     }
 
-    toast.error(`${subscriptionName} subscription error`);
+    console.error(`${subscriptionName} subscription error`);
 
     // Handle specific Supabase error codes
     if (error && typeof error === "object" && "message" in error) {
       const errorMessage = (error as { message: string }).message;
       if (errorMessage.includes("Unauthorized")) {
         console.error("Realtime authorization failed - check JWT token");
-        toast.error("Authentication failed - please sign in again");
+        console.error("Authentication failed - please sign in again");
       } else if (errorMessage.includes("RealtimeDisabledForTenant")) {
         console.error("Realtime is disabled for this project");
-        toast.error("Real-time features are not available");
+        console.error("Real-time features are not available");
       } else if (errorMessage.includes("ConnectionRateLimitReached")) {
         console.error("Too many concurrent connections - rate limit reached");
-        toast.error("Too many connections - please try again later");
+        console.error("Too many connections - please try again later");
       } else {
         console.error("Subscription error message:", errorMessage);
       }
@@ -61,7 +61,7 @@ export function handleSubscriptionStatus(
     }
   } else if (status === "TIMED_OUT") {
     console.warn(`⏰ ${subscriptionName} subscription timed out, retrying...`);
-    toast.error(`${subscriptionName} subscription timed out, retrying...`);
+    console.error(`${subscriptionName} subscription timed out, retrying...`);
   } else if (status === "CLOSED") {
     console.log(`🔒 ${subscriptionName} subscription closed`);
   } else {

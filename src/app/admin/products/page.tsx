@@ -79,7 +79,7 @@ export default function AdminProductsPage() {
       setLastUpdated(new Date());
     } catch (error) {
       console.error("Error fetching products:", error);
-      if (!silent) toast.error("Failed to load products");
+      if (!silent) console.error("Failed to load products");
     } finally {
       setLoading(false);
       setIsRefreshing(false);
@@ -108,7 +108,7 @@ export default function AdminProductsPage() {
       fetchProducts();
     } catch (error) {
       console.error("Error creating product:", error);
-      toast.error("Failed to create product");
+      console.error("Failed to create product");
     }
   };
 
@@ -123,7 +123,7 @@ export default function AdminProductsPage() {
       fetchProducts();
     } catch (error) {
       console.error("Error updating product:", error);
-      toast.error("Failed to update product");
+      console.error("Failed to update product");
     }
   };
 
@@ -135,7 +135,7 @@ export default function AdminProductsPage() {
       fetchProducts();
     } catch (error) {
       console.error("Error deleting product:", error);
-      toast.error("Failed to delete product");
+      console.error("Failed to delete product");
     }
   };
 

@@ -1,4 +1,5 @@
 import { profileService } from '@/services/profile/profileService';
+import { getProfileById } from '@/services/profile/profileServerService';
 import { ProfileType } from '@/types';
 import {
   useQuery,
@@ -24,7 +25,7 @@ export function useProfile(
 ) {
   return useQuery({
     queryKey: profileKeys.detail(userId),
-    queryFn: () => profileService.getProfileById(userId),
+    queryFn: () => getProfileById(userId),
     enabled: !!userId,
     ...options,
   });

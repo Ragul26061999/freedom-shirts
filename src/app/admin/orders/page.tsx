@@ -32,7 +32,6 @@ import { formatCurrency } from "@/utils/formatCurrency";
 import { format } from "date-fns";
 import { toast } from "sonner";
 import { OrderDetailsModal } from "@/components/admin/OrderDetailsModal";
-import { updateOrderStatusAction } from "./actions";
 
 const statusOptions = [
   { value: "all", label: "All Statuses" },
@@ -84,7 +83,7 @@ export default function AdminOrdersPage() {
       setTotalOrders(data.total);
     } catch (error) {
       console.error("Error fetching orders:", error);
-      toast.error("Failed to load orders");
+      console.error("Failed to load orders");
     } finally {
       setLoading(false);
     }
@@ -96,15 +95,15 @@ export default function AdminOrdersPage() {
 
   const handleStatusChange = async (orderId: number, newStatus: string) => {
     try {
-      const result = await updateOrderStatusAction(orderId, newStatus);
-      if (!result.success) {
-        throw new Error(result.error);
+      const success = await adminOrderService.updateOrderStatus(orderId.toString(), newStatus);
+      if (!success) {
+        throw new Error("Failed to update status in database");
       }
       toast.success("Order status updated successfully");
       fetchOrders();
     } catch (error: any) {
       console.error("Error updating order status:", error);
-      toast.error(error.message || "Failed to update order status");
+      console.error(error.message || "Failed to update order status");
     }
   };
 
@@ -243,7 +242,14 @@ export default function AdminOrdersPage() {
                         <span className="flex items-center gap-1">
                           <Calendar className="h-3 w-3" />
                           {order.created_at
-                            ? format(new Date(order.created_at), "MMM dd, yyyy")
+                            ? format(
+                                typeof order.created_at === 'object' && 'toDate' in (order.created_at as any)
+                                  ? (order.created_at as any).toDate()
+                                  : (typeof order.created_at === 'object' && 'seconds' in (order.created_at as any)
+                                      ? new Date((order.created_at as any).seconds * 1000)
+                                      : new Date(order.created_at)),
+                                "MMM dd, yyyy"
+                              )
                             : "No date"}
                         </span>
                         <span className="flex items-center gap-1">

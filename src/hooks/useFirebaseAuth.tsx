@@ -60,7 +60,7 @@ export function useFirebaseAuth() {
       await signInWithEmailAndPassword(auth, email, password);
       toast.success('Signed in successfully');
     } catch (error: any) {
-      toast.error(error.message || 'Failed to sign in');
+      console.error(error.message || 'Failed to sign in');
       throw error;
     } finally {
       setLoading(false);
@@ -76,7 +76,7 @@ export function useFirebaseAuth() {
       }
       toast.success('Signed up successfully');
     } catch (error: any) {
-      toast.error(error.message || 'Failed to sign up');
+      console.error(error.message || 'Failed to sign up');
       throw error;
     } finally {
       setLoading(false);
@@ -91,7 +91,7 @@ export function useFirebaseAuth() {
       setSession(null);
       toast.success('Signed out successfully');
     } catch (error: any) {
-      toast.error(error.message || 'Failed to sign out');
+      console.error(error.message || 'Failed to sign out');
       throw error;
     } finally {
       setLoading(false);

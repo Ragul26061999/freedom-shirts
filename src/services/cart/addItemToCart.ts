@@ -18,7 +18,7 @@ export async function addItemToCart(
 
     if (fetchError) {
       console.error('Error checking existing cart item:', fetchError);
-      toast.error('Failed to check cart');
+      console.error('Failed to check cart');
       return null;
     }
 
@@ -36,7 +36,7 @@ export async function addItemToCart(
 
       if (error) {
         console.error('Error updating cart item:', error);
-        toast.error('Failed to update cart');
+        console.error('Failed to update cart');
         return null;
       }
 
@@ -55,7 +55,7 @@ export async function addItemToCart(
 
       if (error) {
         console.error('Error adding item to cart:', JSON.stringify(error, null, 2), error);
-        toast.error('Failed to add item to cart');
+        console.error('Failed to add item to cart');
         return null;
       }
 
@@ -63,7 +63,7 @@ export async function addItemToCart(
     }
   } catch (error) {
     console.error('Error in addItemToCart:', error);
-    toast.error('Something went wrong');
+    console.error('Something went wrong');
     return null;
   }
 }
