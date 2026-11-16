@@ -232,9 +232,8 @@ export default function AdminProductsPage() {
       <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
         {filteredProducts.map((product) => {
           const primaryImage =
-            product.image ||
             product.variants?.find((v) => v.images && v.images.length > 0)
-              ?.images?.[0];
+              ?.images?.[0] || product.image;
           const isOnSale =
             !!product.discount_price &&
             product.discount_price > 0 &&
