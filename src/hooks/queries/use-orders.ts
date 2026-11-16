@@ -1,4 +1,3 @@
-import { orderService } from '@/services/order/orderService'
 import { getOrders } from '@/services/order/orderServerService'
 import { OrderType } from '@/types'
 import {
@@ -42,113 +41,7 @@ export function useOrders(
 	})
 }
 
-// Get order by ID
-export function useOrder(orderId: string, options?: UseQueryOptions<OrderType>) {
-	return useQuery({
-		queryKey: orderKeys.detail(orderId),
-		queryFn: () => orderService.getOrderById(orderId),
-		enabled: !!orderId,
-		staleTime: 5 * 60 * 1000,
-		retry: (failureCount, error) => {
-			if (
-				error instanceof Error &&
-				(error.message.includes('404') ||
-					error.message.includes('not found'))
-			) {
-				return false
-			}
-			return failureCount < 2
-		},
-		throwOnError: false,
-		...options,
-	})
-}
-
-// Create order mutation
-export function useCreateOrder() {
-	const queryClient = useQueryClient()
-
-	return useMutation({
-		mutationFn: orderService.createOrder,
-		onSuccess: (_data, variables) => {
-			// Invalidate orders list for the user
-			if (variables.userId) {
-				queryClient.invalidateQueries({
-					queryKey: orderKeys.list(variables.userId),
-				})
-			}
-			// Also invalidate all orders lists
-			queryClient.invalidateQueries({
-				queryKey: orderKeys.lists(),
-			})
-		},
-	})
-}
-
-// Update order status mutation
-export function useUpdateOrderStatus() {
-	const queryClient = useQueryClient()
-
-	return useMutation({
-		mutationFn: async ({
-			orderId,
-			status,
-		}: {
-			orderId: number
-			status: string
-		}) => {
-			return orderService.updateOrderStatus(String(orderId), status)
-		},
-		onSuccess: (data) => {
-			if (data) {
-				// Invalidate specific order
-				queryClient.invalidateQueries({
-					queryKey: orderKeys.detail(String(data.id)),
-				})
-				// Invalidate all orders lists
-				queryClient.invalidateQueries({
-					queryKey: orderKeys.lists(),
-				})
-			}
-		},
-	})
-}
-
-// Delete order mutation
-export function useDeleteOrder() {
-	const queryClient = useQueryClient()
-
-	return useMutation({
-		mutationFn: async ({
-			orderId,
-			userId,
-		}: {
-			orderId: string
-			userId?: string
-		}) => {
-			await orderService.deleteOrder(orderId)
-			return { orderId, userId }
-		},
-		onSuccess: (_, variables) => {
-			// Invalidate specific order
-			queryClient.invalidateQueries({
-				queryKey: orderKeys.detail(variables.orderId),
-			})
-			// If userId provided, invalidate that user's orders list
-			if (variables.userId) {
-				queryClient.invalidateQueries({
-					queryKey: orderKeys.list(variables.userId),
-				})
-			}
-			// Invalidate all orders lists
-			queryClient.invalidateQueries({
-				queryKey: orderKeys.lists(),
-			})
-		},
-	})
-}
-
-// Cancel order mutation
+// Cancel order mutation (verifies the caller's Firebase ID token server-side)
 export function useCancelOrder() {
 	const queryClient = useQueryClient()
 
@@ -160,31 +53,30 @@ export function useCancelOrder() {
 		}: {
 			orderId: string
 			reason: string
-			userId: string // Made required to pass to server action
+			userId: string
 		}) => {
-			const { cancelOrderWithRestock } = await import('@/services/order/cancelOrderServer');
-			const result = await cancelOrderWithRestock(orderId, reason, userId);
+			const { auth } = await import('@/lib/firebase/client')
+			const token = await auth.currentUser?.getIdToken()
+			if (!token) throw new Error('You must be signed in to cancel an order.')
+			const { cancelOrderWithRestock } = await import('@/services/order/cancelOrderServer')
+			const result = await cancelOrderWithRestock(orderId, reason, token)
 			if (!result.success) {
-				throw new Error(result.error);
+				throw new Error(result.error)
 			}
 			return { orderId, userId }
 		},
 		onSuccess: (_, variables) => {
-			// Invalidate specific order
 			queryClient.invalidateQueries({
 				queryKey: orderKeys.detail(variables.orderId),
 			})
-			// If userId provided, invalidate that user's orders list
 			if (variables.userId) {
 				queryClient.invalidateQueries({
 					queryKey: orderKeys.list(variables.userId),
 				})
 			}
-			// Invalidate all orders lists
 			queryClient.invalidateQueries({
 				queryKey: orderKeys.lists(),
 			})
 		},
 	})
 }
-

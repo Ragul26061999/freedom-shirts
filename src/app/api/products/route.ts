@@ -1,10 +1,23 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/firebase/admin';
+import type { Query, DocumentData } from 'firebase-admin/firestore';
+
+const serializeDate = (val: unknown): string | null => {
+  if (val && typeof (val as { toDate?: () => Date }).toDate === 'function') {
+    return (val as { toDate: () => Date }).toDate().toISOString();
+  }
+  if (typeof val === 'string' || typeof val === 'number') return String(val);
+  return null;
+};
 
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
     const categoryId = searchParams.get('category_id');
+    const limit = Math.min(parseInt(searchParams.get('limit') || '24', 10), 100);
+    const cursor = searchParams.get('cursor');
+    const sortBy = searchParams.get('sort_by') || 'created_at';
+    const sortOrder = searchParams.get('sort_order') || 'desc';
 
     if (!db || typeof db.collection !== 'function') {
       console.error('Firebase Admin is not initialized. Check your environment variables.');
@@ -14,46 +27,87 @@ export async function GET(request: Request) {
       );
     }
 
-    let snapshot;
+    // Build query with pagination using a typed Query variable
+    let productsRef: Query<DocumentData> = db.collection('products');
+
     if (categoryId) {
-      snapshot = await db.collection('products').where('category_id', '==', categoryId).get();
-    } else {
-      snapshot = await db.collection('products').get();
+      const id = /^\d+$/.test(categoryId) ? Number(categoryId) : categoryId;
+      productsRef = productsRef.where('category_id', '==', id);
     }
 
-    const serializeDate = (val: any) => val && typeof val.toDate === 'function' ? val.toDate().toISOString() : val;
+    const validSortFields = ['created_at', 'title', 'price', 'updated_at'];
+    const sortField = validSortFields.includes(sortBy) ? sortBy : 'created_at';
+    const order: 'asc' | 'desc' = sortOrder === 'asc' ? 'asc' : 'desc';
+    productsRef = productsRef.orderBy(sortField, order);
 
-    const products = await Promise.all(snapshot.docs.map(async (docSnap) => {
-      const data = docSnap.data();
-      let category = null;
-
-      if (data.category_id) {
-        const catDoc = await db.collection('categories').doc(String(data.category_id)).get();
-        if (catDoc.exists) {
-          const catData = catDoc.data()!;
-          category = { 
-            id: catDoc.id, 
-            ...catData,
-            created_at: serializeDate(catData.created_at),
-            updated_at: serializeDate(catData.updated_at)
-          };
-        }
+    if (cursor) {
+      const cursorDoc = await db.collection('products').doc(cursor).get();
+      if (cursorDoc.exists) {
+        productsRef = productsRef.startAfter(cursorDoc);
       }
+    }
 
-      return {
-        product_id: docSnap.id,
-        ...data,
-        created_at: serializeDate(data.created_at),
-        updated_at: serializeDate(data.updated_at),
-        expiry_date: serializeDate(data.expiry_date),
-        manufacturing_date: serializeDate(data.manufacturing_date),
-        category
-      };
-    }));
+    const snapshot = await productsRef.limit(limit + 1).get();
+    const hasMore = snapshot.docs.length > limit;
+    const docs = hasMore ? snapshot.docs.slice(0, limit) : snapshot.docs;
+    const lastDoc = docs.length > 0 ? docs[docs.length - 1].id : null;
 
-    return NextResponse.json({ products });
-  } catch (error: any) {
+    // Fetch all categories in one go (not N+1 per product)
+    const categoriesSnapshot = await db.collection('categories').get();
+    const categoriesById = new Map<string, Record<string, unknown>>();
+    categoriesSnapshot.docs.forEach((catDoc) => {
+      const catData = catDoc.data();
+      categoriesById.set(catDoc.id, {
+        id: catDoc.id,
+        ...catData,
+        created_at: serializeDate(catData.created_at),
+        updated_at: serializeDate(catData.updated_at),
+      });
+    });
+
+    const products = docs
+      .map((docSnap) => {
+        const data = docSnap.data();
+        const category =
+          data.category_id != null
+            ? categoriesById.get(String(data.category_id)) ?? null
+            : null;
+
+        return {
+          product_id: docSnap.id,
+          ...data,
+          created_at: serializeDate(data.created_at),
+          updated_at: serializeDate(data.updated_at),
+          expiry_date: serializeDate(data.expiry_date),
+          manufacturing_date: serializeDate(data.manufacturing_date),
+          category,
+        };
+      })
+      .filter((p) => {
+        if (!p.expiry_date) return true;
+        const expiry = new Date(p.expiry_date);
+        return Number.isNaN(expiry.getTime()) || expiry >= new Date();
+      });
+
+    return NextResponse.json(
+      {
+        products,
+        pagination: {
+          hasMore,
+          nextCursor: lastDoc,
+          limit,
+          totalReturned: products.length,
+        },
+      },
+      {
+        headers: {
+          'Cache-Control': 'public, s-maxage=60, stale-while-revalidate=300',
+        },
+      }
+    );
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Unknown error';
     console.error('Error fetching products from admin API:', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

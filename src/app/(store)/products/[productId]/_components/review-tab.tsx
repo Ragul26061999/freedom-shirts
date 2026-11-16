@@ -39,7 +39,7 @@ export function ReviewTab({ product }: ProductDetailsClientProps) {
   const userReview = useMemo(() => {
     if (!user) return null;
     return (
-      reviews.find((review: ReviewType) => review.user_id === user.id) || null
+      reviews.find((review: ReviewType) => review.user_id === user.uid) || null
     );
   }, [reviews, user]);
 

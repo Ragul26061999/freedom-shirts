@@ -1,373 +1,149 @@
 'use client';
 
-import { createClientSupabase, supabase } from '@/lib/supabase/client';
+import {
+  doc,
+  getDoc,
+  setDoc,
+  updateDoc,
+  deleteDoc,
+  serverTimestamp,
+} from 'firebase/firestore';
+import { auth, db } from '@/lib/firebase/client';
 import { ProfileType } from '@/types';
-import { toast } from 'sonner';
-import { getClientUser } from '@/lib/supabase/clientUtils';
+
+const serializeDate = (value: unknown): unknown => {
+  if (!value) return value;
+  if (typeof value === 'object' && value !== null) {
+    const maybeTimestamp = value as { toDate?: () => Date; seconds?: number; _seconds?: number };
+    if (typeof maybeTimestamp.toDate === 'function') {
+      return maybeTimestamp.toDate().toISOString();
+    }
+    const seconds = maybeTimestamp.seconds ?? maybeTimestamp._seconds;
+    if (typeof seconds === 'number') {
+      return new Date(seconds * 1000).toISOString();
+    }
+  }
+  return value;
+};
+
+function currentUserId(): string | null {
+  return auth.currentUser?.uid ?? null;
+}
 
 export const profileService = {
-  /**
-   * Get profile by user ID
-   *
-   * @param userId User ID to fetch profile for
-   * @returns Promise resolving to profile data or null
-   */
   async getProfileById(userId: string): Promise<ProfileType | null> {
     try {
-      const supabase = createClientSupabase();
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('profile_id', userId)
-        .single();
+      const snap = await getDoc(doc(db, 'profiles', userId));
+      if (!snap.exists()) return null;
 
-      if (error) {
-        console.error('Error fetching profile:', error);
-        console.error('Failed to fetch profile');
-        return null;
-      }
-
-      return data as ProfileType;
+      const data = snap.data();
+      return {
+        profile_id: snap.id,
+        ...data,
+        created_at: serializeDate(data.created_at),
+        updated_at: serializeDate(data.updated_at),
+      } as unknown as ProfileType;
     } catch (error) {
       console.error('Error in getProfileById:', error);
-      console.error('Something went wrong');
       return null;
     }
   },
 
-  /**
-   * Get current user's profile
-   *
-   * @returns Promise resolving to profile data or null
-   */
   async getCurrentProfile(): Promise<ProfileType | null> {
-    try {
-      const user = await getClientUser();
-      if (!user) {
-        return null;
-      }
-
-      return await this.getProfileById(user.id);
-    } catch (error) {
-      console.error('Error in getCurrentProfile:', error);
-      console.error('Something went wrong');
-      return null;
-    }
+    const userId = currentUserId();
+    if (!userId) return null;
+    return this.getProfileById(userId);
   },
 
-  /**
-   * Update profile data
-   *
-   * @param userId User ID to update profile for
-   * @param data Profile data to update
-   * @returns Promise resolving to updated profile data or null
-   */
   async updateProfile(
     userId: string,
     data: Partial<ProfileType>
   ): Promise<ProfileType | null> {
     try {
-      const { data: profile, error } = await supabase
-        .from('profiles')
-        .update({
-          ...data,
-        })
-        .eq('profile_id', userId)
-        .select('*')
-        .single();
+      const profileRef = doc(db, 'profiles', userId);
+      const existing = await getDoc(profileRef);
 
-      if (error) {
-        console.error('Error updating profile:', error);
-        console.error('Failed to update profile');
-        return null;
+      if (existing.exists()) {
+        await updateDoc(profileRef, {
+          ...data,
+          updated_at: serverTimestamp(),
+        });
+      } else {
+        await setDoc(profileRef, {
+          ...data,
+          email: data.email ?? auth.currentUser?.email ?? '',
+          role: data.role ?? 'user',
+          created_at: serverTimestamp(),
+          updated_at: serverTimestamp(),
+        });
       }
 
-      return profile as ProfileType;
+      return await this.getProfileById(userId);
     } catch (error) {
       console.error('Error in updateProfile:', error);
-      console.error('Something went wrong');
       return null;
     }
   },
 
-  /**
-   * Update current user's profile
-   *
-   * @param data Profile data to update
-   * @returns Promise resolving to updated profile data or null
-   */
   async updateCurrentProfile(
     data: Partial<ProfileType>
   ): Promise<ProfileType | null> {
-    try {
-      const user = await getClientUser();
-      if (!user) {
-        return null;
-      }
-
-      return await this.updateProfile(user.id, data);
-    } catch (error) {
-      console.error('Error in updateCurrentProfile:', error);
-      console.error('Something went wrong');
-      return null;
-    }
+    const userId = currentUserId();
+    if (!userId) return null;
+    return this.updateProfile(userId, data);
   },
 
   /**
-   * Delete avatars for a specific user from storage
-   *
-   * @param userId User ID whose avatars should be deleted
-   * @param currentAvatarUrl Optional current avatar URL to preserve
-   * @returns Promise resolving to true if successful, false otherwise
-   */
-  async deleteUserAvatars(
-    userId: string,
-    currentAvatarUrl?: string
-  ): Promise<boolean> {
-    try {
-      if (!userId) {
-        console.error('Invalid userId for avatar deletion');
-        return false;
-      }
-
-      // Determine which bucket the current avatar is in (if any)
-      let currentBucket = null;
-      let currentPath = null;
-
-      if (currentAvatarUrl) {
-        const bucketNames = [
-          'default',
-          'avatars',
-          'images',
-          'public',
-          'storage',
-        ];
-        for (const bucket of bucketNames) {
-          if (currentAvatarUrl.includes(`/${bucket}/`)) {
-            currentBucket = bucket;
-            // Extract the path from the URL (everything after bucket name)
-            const urlParts = currentAvatarUrl.split(`/${bucket}/`);
-            if (urlParts.length > 1) {
-              currentPath = urlParts[1];
-            }
-            break;
-          }
-        }
-      }
-
-      // List of bucket names to try
-      const bucketNames = ['default', 'avatars', 'images', 'public', 'storage'];
-      let successCount = 0;
-
-      // Try to list and delete files from each bucket
-      for (const bucketName of bucketNames) {
-        try {
-          // List all files in the user's folder
-          const { data: files, error: listError } = await supabase.storage
-            .from(bucketName)
-            .list(userId);
-
-          if (listError) {
-            console.log(
-              `Error listing files in bucket "${bucketName}":`,
-              listError
-            );
-            continue;
-          }
-
-          if (!files || files.length === 0) {
-            continue;
-          }
-
-          // Get file paths to delete (excluding current avatar if it's in this bucket)
-          const filesToDelete = files
-            .map((file) => `${userId}/${file.name}`)
-            .filter((path) => {
-              // Skip the current avatar if it's in this bucket
-              if (
-                bucketName === currentBucket &&
-                currentPath &&
-                currentPath.includes(path)
-              ) {
-                return false;
-              }
-              return true;
-            });
-
-          if (filesToDelete.length > 0) {
-            // Delete the files
-            const { error: deleteError } = await supabase.storage
-              .from(bucketName)
-              .remove(filesToDelete);
-
-            if (deleteError) {
-              console.log(
-                `Error deleting files from bucket "${bucketName}":`,
-                deleteError
-              );
-            } else {
-              successCount += filesToDelete.length;
-            }
-          }
-        } catch (error) {
-          console.log(`Error processing bucket "${bucketName}":`, error);
-        }
-      }
-
-      return successCount > 0;
-    } catch (error) {
-      console.error('Error in deleteUserAvatars:', error);
-      return false;
-    }
-  },
-
-  /**
-   * Upload avatar image to Supabase Storage
-   *
-   * @param userId User ID to associate with the avatar
-   * @param file File to upload
-   * @param currentAvatarUrl Optional current avatar URL to replace
-   * @returns Promise resolving to public URL of the uploaded avatar
+   * Upload an avatar through the authenticated Cloudinary endpoint.
    */
   async uploadAvatar(
     userId: string,
     file: File,
-    currentAvatarUrl?: string
+    _currentAvatarUrl?: string
   ): Promise<string | null> {
     try {
-      if (!userId || !file) {
-        console.error('Invalid userId or file for avatar upload');
-        return null;
+      if (!userId || !file) return null;
+
+      const user = auth.currentUser;
+      if (!user || user.uid !== userId) {
+        throw new Error('You must be signed in to upload an avatar.');
       }
 
-      // Get file extension and create a unique filename
-      const fileExt = file.name.split('.').pop();
-      const fileName = `${Math.random()
-        .toString(36)
-        .substring(2, 15)}.${fileExt}`;
+      const token = await user.getIdToken();
+      const formData = new FormData();
+      formData.append('image', file);
 
-      // Store in user-specific folder to enforce ownership through RLS policies
-      // Format: userId/avatar-filename.ext
-      const filePath = `${userId}/${fileName}`;
+      const response = await fetch('/api/profile/upload-avatar', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData,
+      });
 
-      // List of bucket names to try in order
-      const bucketNames = ['default', 'avatars', 'images', 'public', 'storage'];
-      let uploadError = null;
-      let uploadedPath = null;
-      let bucketUsed = null;
-
-      // Try to upload to each bucket until one works
-      for (const bucketName of bucketNames) {
-        try {
-          const { data, error } = await supabase.storage
-            .from(bucketName)
-            .upload(filePath, file, {
-              cacheControl: '3600',
-              upsert: true,
-            });
-
-          if (!error) {
-            // Upload succeeded
-            uploadedPath = data?.path || filePath;
-            bucketUsed = bucketName;
-            break; // Exit the loop if upload is successful
-          } else {
-            uploadError = error;
-            console.log(`Failed to upload to bucket "${bucketName}":`, error);
-          }
-        } catch (error) {
-          console.log(`Error trying bucket "${bucketName}":`, error);
-          // Continue to next bucket
-        }
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok || !result.url) {
+        throw new Error(result.error || 'Failed to upload avatar.');
       }
 
-      // If no bucket worked
-      if (!bucketUsed) {
-        console.error(
-          'All bucket upload attempts failed. Last error:',
-          uploadError
-        );
-        throw new Error(
-          'Failed to upload image. Storage is not properly configured.'
-        );
-      }
-
-      // Get the public URL for the uploaded file
-      const { data: publicUrlData } = supabase.storage
-        .from(bucketUsed)
-        .getPublicUrl(uploadedPath || filePath);
-
-      if (!publicUrlData?.publicUrl) {
-        throw new Error('Failed to get public URL for uploaded image');
-      }
-
-      console.log(`Successfully uploaded to bucket "${bucketUsed}"`);
-
-      // Delete previous avatars after successful upload
-      // We don't need to wait for this to complete or handle errors
-      this.deleteUserAvatars(userId, currentAvatarUrl)
-        .then((success) => {
-          if (success) {
-            console.log('Previous avatars cleaned up successfully');
-          }
-        })
-        .catch((err) => {
-          console.error('Failed to clean up previous avatars:', err);
-        });
-
-      // Return the public URL
-      return publicUrlData.publicUrl;
+      return result.url as string;
     } catch (error) {
       console.error('Error in uploadAvatar:', error);
-      console.error('Failed to upload avatar');
       return null;
     }
   },
 
-  /**
-   * Delete profile data
-   *
-   * @param userId User ID to delete profile for
-   * @returns Promise resolving to true if successful, false otherwise
-   */
   async deleteProfile(userId: string): Promise<boolean> {
     try {
-      const { error } = await supabase
-        .from('profiles')
-        .delete()
-        .eq('id', userId);
-
-      if (error) {
-        console.error('Error deleting profile:', error);
-        console.error('Failed to delete profile');
-        return false;
-      }
-
+      await deleteDoc(doc(db, 'profiles', userId));
       return true;
     } catch (error) {
       console.error('Error in deleteProfile:', error);
-      console.error('Something went wrong');
       return false;
     }
   },
 
-  /**
-   * Delete current user's profile
-   *
-   * @returns Promise resolving to true if successful, false otherwise
-   */
   async deleteCurrentProfile(): Promise<boolean> {
-    try {
-      const user = await getClientUser();
-      if (!user) {
-        return false;
-      }
-
-      return await this.deleteProfile(user.id);
-    } catch (error) {
-      console.error('Error in deleteCurrentProfile:', error);
-      console.error('Something went wrong');
-      return false;
-    }
+    const userId = currentUserId();
+    if (!userId) return false;
+    return this.deleteProfile(userId);
   },
 };

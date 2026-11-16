@@ -8,7 +8,7 @@ import { Navbar } from "@/components/Navbar";
 import { Footer } from "@/components/Footer";
 import { MainLayout } from "@/components/MainLayout";
 import { TanStackQueryProvider } from "@/lib/providers/query-provider";
-import { Toaster } from "sonner";
+import { PremiumToaster } from "@/components/ui/PremiumToaster";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { Inter, Playfair_Display } from "next/font/google";
 import { cn } from "@/lib/utils";
@@ -55,19 +55,7 @@ export default function RootLayout({
             </AuthProvider>
           </TanStackQueryProvider>
         </ErrorBoundary>
-        <Toaster
-          position="top-center"
-          theme="light" // or "dark" or "system"
-          toastOptions={{
-            unstyled: false,
-            classNames: {
-              error: "bg-red-500 text-white border-red-600",
-              success: "bg-green-500 text-white border-green-600",
-              warning: "bg-yellow-500 text-black border-yellow-600",
-              info: "bg-blue-500 text-white border-blue-600",
-            },
-          }}
-        />
+        <PremiumToaster />
         
       </body>
     </html>

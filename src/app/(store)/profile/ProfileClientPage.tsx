@@ -15,7 +15,7 @@ import { updateProfile } from "@/services/profile/profileServerService";
 interface ProfileClientPageProps {
   initialProfile: ProfileType | null;
   initialOrders: OrderType[];
-  user: any;
+  user: { uid: string; email?: string | null };
 }
 
 export default function ProfileClientPage({
@@ -42,7 +42,7 @@ export default function ProfileClientPage({
     try {
       setIsSaving(true);
 
-      const updatedProfile = await updateProfile(user.id, {
+      const updatedProfile = await updateProfile(user.uid, {
         username: usernameInput,
         email: emailInput,
         avatar_url: avatarUrlInput,
@@ -100,8 +100,8 @@ export default function ProfileClientPage({
   useEffect(() => {
     let unsubscribeProfile: () => void;
     // Real-time listener for profile changes
-    if (user.id) {
-      const docRef = doc(db, 'profiles', user.id);
+    if (user.uid) {
+      const docRef = doc(db, 'profiles', user.uid);
       unsubscribeProfile = onSnapshot(docRef, (docSnap) => {
         if (docSnap.exists()) {
           const data = docSnap.data();
@@ -115,7 +115,7 @@ export default function ProfileClientPage({
     return () => {
       if (unsubscribeProfile) unsubscribeProfile();
     };
-  }, [user.id]);
+  }, [user.uid]);
 
   return (
     <div className="container mx-auto px-4 py-6">

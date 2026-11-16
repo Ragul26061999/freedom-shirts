@@ -1,30 +1,35 @@
-import { PostgrestError } from '@supabase/supabase-js';
 import { toast } from 'sonner';
 
 export const ErrorCodes = {
-  NO_ROWS_RETURNED: 'PGRST116',
-  RLS_VIOLATION: '42501',
+  NO_ROWS_RETURNED: 'NOT_FOUND',
+  RLS_VIOLATION: 'PERMISSION_DENIED',
 };
 
 /** Substring in messages from {@link toUserFacingQueryError} for unreachable API/DB. */
 export const UNABLE_TO_REACH_DATABASE = 'Unable to reach the database';
 
+interface QueryErrorLike {
+  message?: string;
+  code?: string;
+}
+
 /**
- * Maps Supabase/PostgREST client errors to an Error for React Query.
+ * Maps a data-layer error to an Error for React Query.
  * Does not log — keeps dev terminal clean; show errors in UI instead.
  */
 export function toUserFacingQueryError(
   subject: string,
-  error: { message?: string; code?: string }
+  error: QueryErrorLike
 ): Error {
   const raw = error.message ?? '';
   if (
     raw.includes('Failed to fetch') ||
     raw.includes('NetworkError') ||
-    raw.includes('Load failed')
+    raw.includes('Load failed') ||
+    raw.includes('unavailable')
   ) {
     return new Error(
-      `${UNABLE_TO_REACH_DATABASE}. Check your connection and Supabase configuration.`
+      `${UNABLE_TO_REACH_DATABASE}. Check your connection and try again.`
     );
   }
   if (error.code === ErrorCodes.RLS_VIOLATION) {
@@ -36,29 +41,25 @@ export function toUserFacingQueryError(
   return new Error(`${subject} could not be loaded.`);
 }
 
-/**
- * Check if error is a "No rows returned" error
- */
-export function isNoRowsError(error: PostgrestError | null): boolean {
+/** Check if an error represents a missing row/document. */
+export function isNoRowsError(error: QueryErrorLike | null): boolean {
   return error?.code === ErrorCodes.NO_ROWS_RETURNED;
 }
 
-/**
- * Check if error is a Row Level Security violation
- */
-export function isRLSViolationError(error: PostgrestError | null): boolean {
-  return error?.code === ErrorCodes.RLS_VIOLATION;
+/** Check if an error represents a permission failure. */
+export function isRLSViolationError(error: QueryErrorLike | null): boolean {
+  return (
+    error?.code === ErrorCodes.RLS_VIOLATION ||
+    error?.code === 'permission-denied'
+  );
 }
 
-/**
- * Check if the error is related to profile not existing or RLS blocking access
- */
-export function isProfileAccessError(error: PostgrestError | null): boolean {
+export function isProfileAccessError(error: QueryErrorLike | null): boolean {
   return isNoRowsError(error) || isRLSViolationError(error);
 }
 
 /**
- * Handle common database errors
+ * Handle common data-layer errors.
  * @returns boolean indicating if the error was handled
  */
 export function handleCommonErrors(
@@ -77,66 +78,47 @@ export function handleCommonErrors(
 
   if (!error) return false;
 
-  // Handle PostgrestError
-  if (isPostgrestError(error)) {
+  if (isQueryErrorLike(error)) {
     if (isNoRowsError(error)) {
       if (!silentOnNoRows) {
         console.warn(`No rows returned for ${context}`);
-        if (showToast) console.error(`No data found.`);
+        if (showToast) toast.error('No data found.');
       }
       return true;
     }
 
     if (isRLSViolationError(error)) {
-      console.error(`RLS violation in ${context}:`, error);
+      console.error(`Permission error in ${context}:`, error);
       if (showToast) {
-        console.error('Permission denied to access this data.');
+        toast.error('Permission denied to access this data.');
       }
       return true;
     }
 
-    // Generic Postgrest error
     console.error(`Database error in ${context}:`, error);
-    if (showToast) console.error(`Database error: ${error.message}`);
+    if (showToast) toast.error(`Database error: ${error.message}`);
     return true;
   }
 
-  // Handle other error types
   if (error instanceof Error) {
     console.error(`Error in ${context}:`, error);
-    if (showToast) console.error(error.message || 'An error occurred');
+    if (showToast) toast.error(error.message || 'An error occurred');
     return true;
   }
 
-  // Unknown error format
   console.error(`Unknown error in ${context}:`, error);
-  if (showToast) console.error('An unexpected error occurred');
+  if (showToast) toast.error('An unexpected error occurred');
   return true;
 }
 
-/**
- * Type guard to check if an error is a PostgrestError
- */
-export function isPostgrestError(error: unknown): error is PostgrestError {
-  return (
-    typeof error === 'object' &&
-    error !== null &&
-    'code' in error &&
-    'message' in error &&
-    'details' in error
-  );
+function isQueryErrorLike(error: unknown): error is QueryErrorLike {
+  return typeof error === 'object' && error !== null && 'message' in error;
 }
 
-/**
- * Log an error with context but don't display to user
- */
 export function logError(context: string, error: unknown): void {
   console.error(`Error in ${context}:`, error);
 }
 
-/**
- * Safe function wrapper that handles common errors
- */
 export async function trySafe<T>(
   fn: () => Promise<T>,
   options: {

@@ -9,7 +9,7 @@ import { OrderCard } from "@/components/OrderCard";
 import { DashboardCharts } from "@/components/dashboard/DashboardCharts";
 import { ErrorState } from "@/components/ErrorState";
 import Image from "next/image";
-import { RotateCcw, Clock, AlertCircle, CheckCircle2, Package, IndianRupee } from "lucide-react";
+import { RotateCcw } from "lucide-react";
 import { formatCurrency } from "@/utils/formatCurrency";
 import { Badge } from "@/components/ui/badge";
 import { format } from "date-fns";
@@ -27,9 +27,9 @@ export default function DashboardPage() {
     error: productsError,
     refetch: refetchProducts,
   } = useProducts();
-  const { data: orders, isLoading: ordersLoading } = useOrders(user?.id || "");
-  const { data: userReturns, isLoading: returnsLoading } = useUserReturns(user?.id || "");
-  const { data: profile } = useProfile(user?.id || "");
+  const { data: orders, isLoading: ordersLoading } = useOrders(user?.uid || "");
+  const { data: userReturns, isLoading: returnsLoading } = useUserReturns(user?.uid || "");
+  const { data: profile } = useProfile(user?.uid || "");
   const isAdmin = profile?.role === "admin";
 
   if (!user) {

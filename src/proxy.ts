@@ -7,7 +7,7 @@ import { NextResponse, type NextRequest } from 'next/server';
  * - /admin/login  → always accessible (the entry point)
  * - /admin/*      → check for a Firebase ID token cookie; if missing → redirect to /admin/login
  *
- * Full admin-role verification (against Supabase admin_users table) is done
+ * Full admin-role verification (Firestore profile role / admin email) is done
  * client-side in the AdminLayout as a secondary layer. The middleware acts as
  * the first, fast gate that blocks unauthenticated requests at the edge.
  *

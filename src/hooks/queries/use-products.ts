@@ -1,7 +1,7 @@
-import { productService } from '@/services/product/productService'
+import { productService, ProductQueryParams } from '@/services/product/productService'
 import { ProductType } from '@/types'
 import { UNABLE_TO_REACH_DATABASE } from '@/utils/errorHandling'
-import { useQuery, UseQueryOptions } from '@tanstack/react-query'
+import { useQuery, UseQueryOptions, keepPreviousData } from '@tanstack/react-query'
 import { useState, useMemo } from 'react'
 
 // Filter Options Interface
@@ -21,6 +21,8 @@ export const productKeys = {
   detail: (id: string) => [...productKeys.details(), id] as const,
   category: (categoryId: number | string) =>
     [...productKeys.lists(), { categoryId }] as const,
+  paginated: (params: ProductQueryParams) =>
+    [...productKeys.lists(), { ...params }] as const,
   filtered: (filters: FilterOptions, searchTerm: string) =>
     [...productKeys.lists(), { filters, searchTerm }] as const,
 };
@@ -332,4 +334,25 @@ export function useFilteredProducts(
     isStale: productsQuery.isStale,
     dataUpdatedAt: productsQuery.dataUpdatedAt,
   };
+}
+
+// ── Pagination hook (server-side pagination for 100k+ catalog) ──────────────
+export function useProductList(params: ProductQueryParams = {}) {
+  return useQuery<ProductType[], Error>({
+    queryKey: productKeys.paginated(params),
+    queryFn: async () => {
+      try {
+        const response = await productService.getProductsWithFilters(params);
+        return response;
+      } catch (error) {
+        throw error instanceof Error ? error : UNABLE_TO_REACH_DATABASE;
+      }
+    },
+    staleTime: 300000, // 5 minutes
+    gcTime: 2 * 60 * 1000, // 2 minutes garbage collection
+    refetchOnWindowFocus: false,
+    placeholderData: keepPreviousData,
+    retry: (failureCount, error) =>
+      failureCount < 2 && error?.message?.includes('Failed to fetch'),
+  });
 }

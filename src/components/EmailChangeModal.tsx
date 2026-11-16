@@ -1,6 +1,5 @@
 'use client'
 import { useState } from 'react'
-import { User } from '@supabase/supabase-js'
 import {
 	Dialog,
 	DialogContent,
@@ -14,11 +13,17 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Eye, EyeOff } from 'lucide-react'
 import { useUpdateProfile } from '@/hooks/queries'
-import { supabase } from '@/lib/supabase/client'
+import {
+	EmailAuthProvider,
+	reauthenticateWithCredential,
+	sendEmailVerification,
+	updateEmail,
+} from 'firebase/auth'
+import { auth } from '@/lib/firebase/client'
 import { toast } from 'sonner'
 
 interface EmailChangeModalProps {
-	user: User
+	user: { uid: string; email?: string | null }
 	isOpen: boolean
 	onClose: () => void
 	setEmail: (email: string) => void
@@ -44,34 +49,41 @@ export function EmailChangeModal({
 		setIsSubmitting(true)
 
 		try {
-			// First verify the current password
-			const { error: signInError } = await supabase.auth.signInWithPassword({
-				email: user.email!,
-				password: currentPassword,
-			})
+			const currentUser = auth.currentUser
+			if (!currentUser?.email) {
+				throw new Error('You must be signed in to change your email')
+			}
 
-			if (signInError) {
+			// Re-authenticate with the current password before changing the email.
+			const credential = EmailAuthProvider.credential(
+				currentUser.email,
+				currentPassword
+			)
+
+			try {
+				await reauthenticateWithCredential(currentUser, credential)
+			} catch {
 				setError('Current password is incorrect')
 				return
 			}
 
-			// Then update the email
-			const { error: updateError } = await supabase.auth.updateUser({
-				email: newEmail,
-			})
-
-			if (updateError) {
-				if (updateError.message.toLowerCase().includes('email')) {
+			try {
+				await updateEmail(currentUser, newEmail)
+				await sendEmailVerification(currentUser)
+			} catch (error) {
+				const message =
+					error instanceof Error ? error.message : 'Failed to update email'
+				if (message.toLowerCase().includes('email')) {
 					setError('Invalid email format or email already in use')
 				} else {
-					setError(updateError.message)
+					setError(message)
 				}
 				return
 			}
 
-			// Then update the email in public.profiles using the mutation hook
+			// Keep the profile document in sync.
 			await updateProfile.mutateAsync({
-				userId: user.id,
+				userId: currentUser.uid,
 				data: { email: newEmail },
 			})
 

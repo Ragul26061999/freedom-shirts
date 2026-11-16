@@ -12,7 +12,9 @@ export const categoryKeys = {
 }
 
 // Get all categories
-export function useCategories(options?: UseQueryOptions<CategoryType[]>) {
+export function useCategories(
+	options?: Omit<UseQueryOptions<CategoryType[]>, 'queryKey' | 'queryFn'>
+) {
 	return useQuery({
 		queryKey: categoryKeys.lists(),
 		queryFn: categoryService.getCategories,

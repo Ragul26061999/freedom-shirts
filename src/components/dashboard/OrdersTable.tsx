@@ -12,7 +12,7 @@ import {
 } from "@tanstack/react-table";
 import { OrderType } from "@/types";
 import { useOrders } from '@/hooks/queries'
-import { getClientUser } from "@/lib/supabase/clientUtils";
+import { auth } from "@/lib/firebase/client";
 import { Button } from "@/components/ui/button";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { formatCurrency } from "@/utils/formatCurrency";
@@ -73,11 +73,11 @@ export function OrdersTable() {
   useQuery({
     queryKey: ["currentUser"],
     queryFn: async () => {
-      const user = await getClientUser();
+      const user = auth.currentUser;
       if (user) {
-        setUserId(user.id);
+        setUserId(user.uid);
       }
-      return user;
+      return user ? { id: user.uid, email: user.email } : null;
     },
   });
 

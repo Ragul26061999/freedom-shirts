@@ -4,20 +4,25 @@ import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { DealsSection } from "@/components/DealsSection";
 import { CategoryBar } from "@/components/CategoryBar";
 import { RecentlyViewed } from "@/components/RecentlyViewed";
+import { categoryServerService } from "@/services/category/categoryServerService";
 
+
+export const dynamic = "force-dynamic";
 
 export const metadata = {
   title: "FSC – Freedom Shirt Company | Premium Shirts & Tailoring",
   description: "Crafted with precision. Premium quality shirts, custom tailoring, and timeless fashion for the modern gentleman.",
 };
 
-export default function Home() {
+export default async function Home() {
+  const categories = await categoryServerService.getCategories();
+
   return (
     <ErrorBoundary>
       <div className="bg-background min-h-screen">
         {/* Category Icon Bar */}
         <div className="pt-[84px] sm:pt-[100px]">
-          <CategoryBar />
+          <CategoryBar initialCategories={categories} />
         </div>
 
         {/* Deals and Offers */}

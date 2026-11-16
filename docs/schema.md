@@ -2,202 +2,251 @@
 
 ## Overview
 
-This document outlines the database schema for our e-commerce application. We use Supabase (PostgreSQL) as our database provider.
+The data layer is **Cloud Firestore** (Firebase). Data is organized as top-level collections whose documents use the IDs provided by Firestore. Firebase Authentication owns user identities; the Firestore `profiles` document uses the Firebase UID as its document ID.
 
-## Common Queries
+Types are declared in `src/types.ts`. Access rules live in `firestore.rules`.
 
-### Get all products in a category
-```sql
-SELECT * FROM products WHERE category_id = [category_id];
+## Common Query Patterns
+
+### Products in a category
+
+```ts
+const snapshot = await getDocs(
+  query(collection(db, 'products'), where('category_id', '==', categoryId))
+);
 ```
 
-### Get all orders for a user
-```sql
-SELECT * FROM orders WHERE user_id = [user_id];
+### Orders for a user
+
+```ts
+const snapshot = await getDocs(
+  query(collection(db, 'orders'), where('user_id', '==', uid))
+);
 ```
 
-### Get all items in an order with product details
-```sql
-SELECT oi.*, p.title, p.image 
-FROM order_items oi
-JOIN products p ON oi.product_id = p.product_id
-WHERE oi.order_id = [order_id];
+### Items in an order
+
+```ts
+const snapshot = await getDocs(
+  query(collection(db, 'order_items'), where('order_id', '==', orderId))
+);
 ```
 
-### Get all reviews for a product
-```sql
-SELECT r.*, p.username
-FROM reviews r
-JOIN profiles p ON r.user_id = p.profile_id
-WHERE r.product_id = [product_id];
+### Reviews for a product
+
+```ts
+const snapshot = await getDocs(
+  query(collection(db, 'reviews'), where('product_id', '==', productId))
+);
 ```
 
-### Get user's default shipping address
-```sql
-SELECT * FROM addresses
-WHERE user_id = [user_id] AND is_default = true;
+### Default shipping address
+
+```ts
+const snapshot = await getDocs(
+  query(
+    collection(db, 'addresses'),
+    where('user_id', '==', uid),
+    where('is_default', '==', true)
+  )
+);
 ```
 
-## Tables
+## Collections
 
-### profiles
+### `profiles/{uid}`
 
-Stores user profile information.
+| Field | Type | Notes |
+|---|---|---|
+| `profile_id` | string | Same as the Firebase UID |
+| `username` | string | Display name |
+| `email` | string | Kept in sync with Auth |
+| `avatar_url` | string | Cloudinary URL |
+| `role` | `"admin" \| "user"` | Drives admin access |
+| `created_at` | timestamp | ISO string or Firestore timestamp |
+| `updated_at` | timestamp | Updated on writes |
 
-| Column       | Type         | Description                              | Constraints       |
-|--------------|--------------|------------------------------------------|------------------|
-| profile_id   | UUID         | Primary key, matches Supabase auth.uid() | PK, NOT NULL     |
-| username     | TEXT         | User's display name                      | NULL allowed     |
-| avatar_url   | TEXT         | URL to user's avatar image               | NULL allowed     |
-| created_at   | TIMESTAMPTZ  | When the profile was created             | NOT NULL, DEFAULT now() |
+**Rules:** users read/update their own document; admins may read all.
 
-#### RLS Policies
-- Users can insert their own profile: `auth.uid() = profile_id`
-- Users can view their own profile: `auth.uid() = profile_id`
-- Users can update their own profile: `auth.uid() = profile_id`
+### `products/{productId}`
 
-### products
+| Field | Type | Notes |
+|---|---|---|
+| `title` | string | Product name |
+| `description` | string | Long description |
+| `price` | number | Base price |
+| `discount_price` | number? | Optional offer price |
+| `offer_start_date` / `offer_end_date` | string? | Offer window |
+| `image` | string? | Main image URL |
+| `stock` | number | Available units |
+| `sku` | string? | Stock keeping unit |
+| `category_id` | number \| string? | References `categories` |
+| `variants` | array? | `{ color, images, sizes: [{ size, stock }] }` |
+| `created_at` / `updated_at` | timestamp | Audit fields |
 
-Stores product information.
+**Rules:** public read; admin-only writes.
 
-| Column       | Type         | Description                              | Constraints       |
-|--------------|--------------|------------------------------------------|------------------|
-| product_id   | UUID         | Primary key                              | PK, NOT NULL, DEFAULT gen_random_uuid() |
-| title        | VARCHAR      | Product title                            | NOT NULL        |
-| description  | TEXT         | Product description                      | NOT NULL        |
-| price        | NUMERIC      | Product price                            | NOT NULL, CHECK (price > 0) |
-| image        | VARCHAR      | URL to product image                     | NULL allowed     |
-| stock        | INTEGER      | Available stock                          | NOT NULL, DEFAULT 0, CHECK (stock >= 0) |
-| sku          | VARCHAR      | Stock keeping unit                       | NULL allowed     |
-| category_id  | INTEGER      | Reference to categories.id               | FK, NULL allowed |
-| created_at   | TIMESTAMPTZ  | When the product was created             | DEFAULT CURRENT_TIMESTAMP |
-| updated_at   | TIMESTAMPTZ  | When the product was last updated        | DEFAULT CURRENT_TIMESTAMP |
+### `categories/{categoryId}`
 
-#### RLS Policies
-- Everyone can view products: `true`
-- Only admins can insert/update/delete products: `auth.uid() IN (SELECT profile_id FROM admin_users)`
+| Field | Type | Notes |
+|---|---|---|
+| `name` | string | Category name |
+| `description` | string | Description or image URL |
+| `parent_id` | number? | Optional parent category |
 
-### categories
+**Rules:** public read; admin-only writes.
 
-Stores product categories.
+### `carts/{cartId}`
 
-| Column       | Type         | Description                              | Constraints       |
-|--------------|--------------|------------------------------------------|------------------|
-| id           | SERIAL       | Primary key                              | PK, NOT NULL     |
-| name         | VARCHAR      | Category name                            | NOT NULL        |
-| description  | TEXT         | Category description                     | NOT NULL        |
-| parent_id    | INTEGER      | Reference to parent category             | FK (self), NULL allowed |
+| Field | Type | Notes |
+|---|---|---|
+| `user_id` | string | Firebase UID |
+| `status` | `"active" \| "abandoned" \| "converted"` | Cart lifecycle |
+| `total_items` | number | Cached count |
+| `total_price` | number | Cached total |
+| `created_at` / `updated_at` | timestamp | Audit fields |
 
-#### RLS Policies
-- Everyone can view categories: `true`
-- Only admins can insert/update/delete categories: `auth.uid() IN (SELECT profile_id FROM admin_users)`
+### `cart_items/{cartItemId}`
 
-### addresses
+| Field | Type | Notes |
+|---|---|---|
+| `cart_id` | string | Parent cart |
+| `product_id` | string | Product reference |
+| `quantity` | number | Units |
+| `price` | number | Unit price at add time |
+| `selectedColor` / `selectedSize` | string? | Variant selection |
 
-Stores user addresses.
+**Rules:** a user may read/write only items belonging to their own cart.
 
-| Column       | Type         | Description                              | Constraints       |
-|--------------|--------------|------------------------------------------|------------------|
-| id           | SERIAL       | Primary key                              | PK, NOT NULL     |
-| user_id      | UUID         | Reference to profiles.profile_id         | FK, NOT NULL     |
-| street       | VARCHAR      | Street address                           | NOT NULL        |
-| city         | VARCHAR      | City                                     | NOT NULL        |
-| state        | VARCHAR      | State/province                           | NULL allowed     |
-| zip_code     | VARCHAR      | Postal/zip code                          | NOT NULL        |
-| country      | VARCHAR      | Country                                  | NOT NULL        |
-| is_default   | BOOLEAN      | Whether this is the default address      | DEFAULT FALSE    |
+### `orders/{orderId}`
 
-#### RLS Policies
-- Users can view/insert/update their own addresses: `auth.uid() = user_id`
+| Field | Type | Notes |
+|---|---|---|
+| `user_id` | string | Firebase UID |
+| `status` | `pending \| processing \| shipped \| delivered \| cancelled` | Order state |
+| `total` | number | Order total |
+| `shipping_address_id` | number \| string | Address reference |
+| `payment_method` | string? | `polar` or `cod` |
+| `payment_id` | string? | Gateway reference |
+| `payment_status` | string? | Payment state |
+| `polar_checkout_id` | string? | Polar checkout reference |
+| `idempotency_key` | string? | Webhook/payment dedupe |
+| `cancellation_reason` | string? | Set on cancel |
+| `created_at` / `updated_at` / `delivered_at` | timestamp | Audit fields |
 
-### orders
+**Rules:** users read/create their own orders; status updates from the client are limited; server actions use the Admin SDK.
 
-Stores order information.
+### `order_items/{itemId}`
 
-| Column              | Type          | Description                        | Constraints       |
-|--------------------|----------------|------------------------------------|--------------------|
-| id                 | SERIAL        | Primary key                         | PK, NOT NULL       |
-| user_id            | UUID          | Reference to profiles.profile_id    | FK, NOT NULL       |
-| status             | order_status  | Order status (enum)                 | DEFAULT 'pending'  |
-| total              | NUMERIC       | Total amount of the order           | NOT NULL, CHECK (total >= 0) |
-| shipping_address_id| INTEGER       | Reference to addresses.id           | FK, NOT NULL       |
-| payment_method     | VARCHAR       | Payment method used                 | NULL allowed       |
-| payment_id         | VARCHAR       | Payment provider reference ID       | NULL allowed       |
-| created_at         | TIMESTAMPTZ   | When the order was created          | DEFAULT CURRENT_TIMESTAMP |
-| updated_at         | TIMESTAMPTZ   | When the order was last updated     | DEFAULT CURRENT_TIMESTAMP |
+| Field | Type | Notes |
+|---|---|---|
+| `order_id` | string | Parent order |
+| `product_id` | string | Product reference |
+| `quantity` | number | Units |
+| `price` | number | Unit price at purchase |
+| `selectedColor` / `selectedSize` | string? | Variant selection |
 
-#### RLS Policies
-- Users can insert their own orders: `auth.uid() = user_id`
-- Users can view their own orders: `auth.uid() = user_id`
+### `addresses/{addressId}`
 
-### order_items
+| Field | Type | Notes |
+|---|---|---|
+| `user_id` | string | Firebase UID |
+| `street` | string | Street address |
+| `city` | string | City |
+| `state` | string? | State |
+| `zip_code` | string | Postal code |
+| `country` | string | Country |
+| `is_default` | boolean | Default address flag |
 
-Stores items in an order.
+### `reviews/{reviewId}`
 
-| Column       | Type         | Description                              | Constraints       |
-|--------------|--------------|------------------------------------------|------------------|
-| id           | SERIAL       | Primary key                              | PK, NOT NULL     |
-| order_id     | INTEGER      | Reference to orders.id                   | FK, NOT NULL     |
-| product_id   | UUID         | Reference to products.product_id         | FK, NOT NULL     |
-| quantity     | INTEGER      | Quantity of the product                  | NOT NULL, CHECK (quantity > 0) |
-| price        | NUMERIC      | Price of the product at time of purchase | NOT NULL, CHECK (price >= 0) |
+| Field | Type | Notes |
+|---|---|---|
+| `product_id` | string | Reviewed product |
+| `user_id` | string | Author UID |
+| `rating` | number | 1–5 |
+| `comment` | string? | Review text |
+| `created_at` | timestamp | Creation date |
 
-#### RLS Policies
-- Users can view their own order items: `auth.uid() = (SELECT user_id FROM orders WHERE id = order_id)`
-- Users can insert items into their own orders: `auth.uid() = (SELECT user_id FROM orders WHERE id = order_id)`
+**Rules:** public read; authenticated users create/update their own reviews.
 
-### reviews
+### `returns/{returnId}`
 
-Stores product reviews.
+| Field | Type | Notes |
+|---|---|---|
+| `order_id` | number \| string | Related order |
+| `user_id` | string | Customer UID |
+| `items` | array | `{ product_id, title, image, quantity, price, selectedColor?, selectedSize? }` |
+| `reason_category` | enum | `size_issue`, `defective_damaged`, `wrong_item`, `quality_issue`, `not_as_described`, `other` |
+| `detailed_reason` | string | Customer explanation |
+| `proof_images` | string[]? | Cloudinary URLs |
+| `preferred_resolution` | enum | `refund`, `replacement`, `store_credit` |
+| `status` | enum | `pending`, `approved`, `rejected`, `pickup_scheduled`, `received`, `completed` |
+| `admin_notes` | string? | Admin response |
+| `restocked` | boolean? | Whether stock was returned |
+| `refund_amount` | number | Expected refund |
+| `refund_status` | enum? | `pending`, `processed`, `failed` |
+| `created_at` / `updated_at` | timestamp | Audit fields |
 
-| Column       | Type         | Description                              | Constraints       |
-|--------------|--------------|------------------------------------------|------------------|
-| id           | SERIAL       | Primary key                              | PK, NOT NULL     |
-| product_id   | UUID         | Reference to products.product_id         | FK, NOT NULL     |
-| user_id      | UUID         | Reference to profiles.profile_id         | FK, NOT NULL     |
-| rating       | INTEGER      | Rating (1-5)                             | NOT NULL, CHECK (rating BETWEEN 1 AND 5) |
-| comment      | TEXT         | Review text                              | NULL allowed     |
-| created_at   | TIMESTAMPTZ  | When the review was created              | DEFAULT CURRENT_TIMESTAMP |
+### `contact_messages/{messageId}`
 
-#### RLS Policies
-- Everyone can view reviews: `true`
-- Users can insert/update their own reviews: `auth.uid() = user_id`
+| Field | Type | Notes |
+|---|---|---|
+| `name` | string | Sender name |
+| `email` | string | Sender email |
+| `phone` | string | Optional phone |
+| `subject` | string | Defaults to "General enquiry" |
+| `message` | string | Message body |
+| `status` | string | `"new"` on creation |
+| `createdAt` | timestamp | Server timestamp |
 
-## Custom Types
+### `homepage_settings/{sectionName}`
 
-### order_status
-An ENUM type with the following values:
-- 'pending'
-- 'processing'
-- 'shipped'
-- 'delivered'
-- 'cancelled'
+| Field | Type | Notes |
+|---|---|---|
+| `content_json` | object \| array | Hero slides or promo banners |
+| `updated_at` | timestamp | Last edit |
+
+Sections currently used: `hero_section`, `promo_banners`.
+
+### `stock_history/{entryId}`
+
+| Field | Type | Notes |
+|---|---|---|
+| `product_id` | string | Product reference |
+| `action` | string | e.g. `customer_return` |
+| `previous_quantity` | number | Stock before |
+| `new_quantity` | number | Stock after |
+| `difference` | number | Delta |
+| `reason` | string? | Human-readable reason |
+| `created_at` | timestamp | Movement date |
 
 ## Relationships
 
-- `profiles.profile_id` ← `orders.user_id`: A user can have many orders
-- `profiles.profile_id` ← `addresses.user_id`: A user can have many addresses
-- `profiles.profile_id` ← `reviews.user_id`: A user can write many reviews
-- `addresses.id` ← `orders.shipping_address_id`: An address can be used for many orders
-- `orders.id` ← `order_items.order_id`: An order can have many order items (CASCADE on delete)
-- `products.product_id` ← `order_items.product_id`: A product can be in many order items (RESTRICT on delete)
-- `products.product_id` ← `reviews.product_id`: A product can have many reviews (CASCADE on delete)
-- `categories.id` ← `products.category_id`: A category can have many products (SET NULL on delete)
-- `categories.id` ← `categories.parent_id`: A category can have subcategories (SET NULL on delete)
+Firestore has no foreign keys, so references are stored by ID and joined in the service layer:
+
+- `profiles.profile_id` → `orders.user_id`, `addresses.user_id`, `reviews.user_id`, `returns.user_id`
+- `orders.id` → `order_items.order_id`, `returns.order_id`
+- `products.product_id` → `order_items.product_id`, `reviews.product_id`, `stock_history.product_id`
+- `categories.id` → `products.category_id`
+- `carts.id` → `cart_items.cart_id`
 
 ## Indexes
 
-- `idx_products_category`: Index on `products.category_id`
-- `idx_orders_user`: Index on `orders.user_id`
-- `idx_order_items_order`: Index on `order_items.order_id`
-- `idx_order_items_product`: Index on `order_items.product_id`
-- `idx_reviews_product`: Index on `reviews.product_id`
-- `idx_reviews_user`: Index on `reviews.user_id`
-- `idx_addresses_user`: Index on `addresses.user_id`
+Composite indexes may be required for queries combining filters, for example:
 
-## Notes on Security
+- `orders`: `user_id` + `created_at`
+- `order_items`: `order_id`
+- `reviews`: `product_id` + `created_at`
+- `addresses`: `user_id` + `is_default`
+- `stock_history`: `product_id` + `created_at`
 
-- All tables have Row Level Security (RLS) enabled
-- Policies are designed to ensure users can only access their own data
-- Product and category data is publicly readable but protected for writes
-- Only administrators can create or modify products and categories 
+Create missing indexes from the link Firestore prints when a query needs one.
+
+## Security Notes
+
+- `firestore.rules` is the source of truth for client access. Deploy it with `firebase deploy --only firestore:rules`.
+- Product and category reads are public; writes are admin-only.
+- Users may only read/write their own carts, orders and profile.
+- Admin actions run through the **Admin SDK** in server actions after verifying a Firebase ID token, so they bypass client rules safely.
+- Never trust prices, totals or user IDs supplied by the client for checkout or cancellation.

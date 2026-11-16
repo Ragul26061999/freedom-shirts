@@ -1,18 +1,23 @@
-import { Suspense } from "react";
+"use client";
+
+import { Suspense, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import CategoryPage from "@/components/CategoryPage";
 import { LoadingSpinner } from "@/components/LoadingSpinner";
-import { createServerSupabase } from "@/lib/supabase/server";
-import { redirect } from "next/navigation";
+import { useAuth } from "@/context/AuthContext";
 
-export default async function ClothingPage() {
-  // Check if user is authenticated to view restricted category
-  const supabase = await createServerSupabase();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+export default function ClothingPage() {
+  const { user, loading } = useAuth();
+  const router = useRouter();
 
-  if (!user) {
-    redirect("/signin");
+  useEffect(() => {
+    if (!loading && !user) {
+      router.replace("/signin");
+    }
+  }, [loading, user, router]);
+
+  if (loading || !user) {
+    return <LoadingSpinner />;
   }
 
   return (

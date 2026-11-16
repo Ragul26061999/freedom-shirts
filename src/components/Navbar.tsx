@@ -144,14 +144,14 @@ export function Navbar() {
             <Button
               variant="ghost"
               size="icon"
-              className="h-10 w-10 rounded-xl cursor-pointer hover:bg-primary/10 transition-colors"
+              className="h-11 w-11 rounded-xl cursor-pointer hover:bg-primary/10 transition-colors"
               onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
               aria-label="Toggle menu"
             >
               {isMobileMenuOpen ? (
-                <X className="h-5 w-5" />
+                <X className="h-6 w-6" />
               ) : (
-                <Menu className="h-5 w-5" />
+                <Menu className="h-6 w-6" />
               )}
             </Button>
           </div>

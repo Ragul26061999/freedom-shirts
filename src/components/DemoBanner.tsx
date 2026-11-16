@@ -7,7 +7,7 @@ export function DemoBanner() {
         <Info className="h-4 w-4 flex-shrink-0" />
         <span className="font-medium">🚀 Demo E-Commerce Website</span>
         <span className="hidden sm:flex">
-          | Built with Next.js & Supabase Database
+          | Built with Next.js & Firebase
         </span>
       
       </div>

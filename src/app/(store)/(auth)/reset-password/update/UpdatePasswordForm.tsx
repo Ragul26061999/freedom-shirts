@@ -8,10 +8,20 @@ import { CardContent, CardFooter } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Eye, EyeOff } from "lucide-react";
-import { supabase } from "@/lib/supabase/client";
+import {
+  confirmPasswordReset,
+  verifyPasswordResetCode,
+} from "firebase/auth";
+import { auth } from "@/lib/firebase/client";
 import { toast } from "sonner";
 
-export function UpdatePasswordForm({ message }: { message: string | null }) {
+export function UpdatePasswordForm({
+  message,
+  oobCode,
+}: {
+  message: string | null;
+  oobCode: string | null;
+}) {
   const router = useRouter();
 
   const [password, setPassword] = useState("");
@@ -20,53 +30,57 @@ export function UpdatePasswordForm({ message }: { message: string | null }) {
   const [error, setError] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [resetEmail, setResetEmail] = useState<string | null>(null);
+  const [codeState, setCodeState] = useState<"checking" | "valid" | "invalid">(
+    "checking"
+  );
 
-  // Check if we have the hash fragment from the URL (Supabase authentication flow)
   useEffect(() => {
-    // When the component mounts, check if we're in the hash fragment flow
-    const checkHashParams = () => {
-      const hash = window.location.hash;
-      if (hash && hash.length > 1) {
-        const hashParams = new URLSearchParams(
-          window.location.hash.substring(1),
+    let cancelled = false;
+
+    const verifyCode = async () => {
+      if (!oobCode) {
+        setCodeState("invalid");
+        setError(
+          "This reset link is invalid or has expired. Please request a new password reset email."
         );
-        const accessToken = hashParams.get("access_token");
-        const type = hashParams.get("type");
+        return;
+      }
 
-        if (accessToken && type === "recovery") {
-          // We have a valid recovery flow from email link
-          console.log("Valid recovery flow detected");
-
-          // Set the access token in Supabase to authenticate the user
-          // This is important - without this, updateUser won't work
-          supabase.auth.setSession({
-            access_token: accessToken,
-            refresh_token: hashParams.get("refresh_token") || "",
-          });
-        }
+      try {
+        const email = await verifyPasswordResetCode(auth, oobCode);
+        if (cancelled) return;
+        setResetEmail(email);
+        setCodeState("valid");
+      } catch (err) {
+        if (cancelled) return;
+        setCodeState("invalid");
+        setError(
+          err instanceof Error
+            ? err.message
+            : "This reset link is invalid or has expired."
+        );
       }
     };
 
-    // Check hash params immediately and also listen for hash changes
-    checkHashParams();
-    window.addEventListener("hashchange", checkHashParams);
-
+    verifyCode();
     return () => {
-      window.removeEventListener("hashchange", checkHashParams);
+      cancelled = true;
     };
-  }, []);
+  }, [oobCode]);
 
-  const togglePasswordVisibility = () => {
-    setShowPassword(!showPassword);
-  };
-
-  const toggleConfirmPasswordVisibility = () => {
+  const togglePasswordVisibility = () => setShowPassword(!showPassword);
+  const toggleConfirmPasswordVisibility = () =>
     setShowConfirmPassword(!showConfirmPassword);
-  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+
+    if (!oobCode || codeState !== "valid") {
+      setError("This reset link is invalid or has expired.");
+      return;
+    }
 
     if (!password) {
       setError("Password is required");
@@ -85,26 +99,14 @@ export function UpdatePasswordForm({ message }: { message: string | null }) {
 
     try {
       setLoading(true);
+      await confirmPasswordReset(auth, oobCode, password);
+      toast.success("Password updated successfully!");
 
-      // According to the Supabase docs, we use updateUser to set the new password
-      const { data, error } = await supabase.auth.updateUser({
-        password,
-      });
-
-      if (error) {
-        throw error;
-      }
-
-      if (data) {
-        toast.success("Password updated successfully!");
-
-        // Redirect to sign in page after successful password update
-        setTimeout(() => {
-          router.push(
-            "/signin?message=Your password has been updated successfully. Please sign in with your new password.",
-          );
-        }, 2000);
-      }
+      setTimeout(() => {
+        router.push(
+          "/signin?message=Your password has been updated successfully. Please sign in with your new password."
+        );
+      }, 1500);
     } catch (error: unknown) {
       const errorMessage =
         error instanceof Error
@@ -130,10 +132,11 @@ export function UpdatePasswordForm({ message }: { message: string | null }) {
             {message}
           </div>
         )}
-        <div className="mb-2 rounded-md bg-blue-50 p-3 text-sm text-blue-800">
-          Enter your new password below. You must have clicked the password
-          reset link from your email to complete this process.
-        </div>
+        {resetEmail && (
+          <div className="mb-2 rounded-md bg-blue-50 p-3 text-sm text-blue-800">
+            Resetting password for <strong>{resetEmail}</strong>.
+          </div>
+        )}
         <div className="space-y-2">
           <Label htmlFor="password">New Password</Label>
           <div className="relative">
@@ -146,6 +149,7 @@ export function UpdatePasswordForm({ message }: { message: string | null }) {
               required
               minLength={6}
               placeholder="••••••"
+              disabled={codeState !== "valid" || loading}
             />
             <button
               type="button"
@@ -176,6 +180,7 @@ export function UpdatePasswordForm({ message }: { message: string | null }) {
               required
               minLength={6}
               placeholder="••••••"
+              disabled={codeState !== "valid" || loading}
             />
             <button
               type="button"
@@ -199,10 +204,19 @@ export function UpdatePasswordForm({ message }: { message: string | null }) {
         <Button
           type="submit"
           className="hover:bg-primary/90 w-full cursor-pointer"
-          disabled={loading}
+          disabled={loading || codeState !== "valid"}
         >
-          {loading ? "Updating..." : "Update Password"}
+          {loading
+            ? "Updating..."
+            : codeState === "checking"
+              ? "Verifying link..."
+              : "Update Password"}
         </Button>
+        {codeState === "invalid" && (
+          <Link href="/reset-password" className="mt-3 text-sm underline">
+            Request a new reset link
+          </Link>
+        )}
         <div className="mt-4 text-center text-sm">
           Remember your password?{" "}
           <Link

@@ -1,8 +1,9 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { doc, getDoc } from "firebase/firestore";
 import { useAuth } from "@/context/AuthContext";
-import { supabase } from "@/lib/supabase/client";
+import { db } from "@/lib/firebase/client";
 
 interface AdminData {
   isAdmin: boolean;
@@ -10,9 +11,21 @@ interface AdminData {
   error: string | null;
 }
 
+const ADMIN_EMAILS = (process.env.NEXT_PUBLIC_ADMIN_EMAILS || "innovacentra@gmail.com")
+  .split(",")
+  .map((email) => email.trim().toLowerCase())
+  .filter(Boolean);
+
+function isAdminEmail(email?: string | null): boolean {
+  return !!email && ADMIN_EMAILS.includes(email.toLowerCase());
+}
+
 /**
- * Custom hook to check if the current user has admin privileges
- * Uses the admin_users view which filters profiles where role='admin'
+ * Check whether the signed-in Firebase user is an admin.
+ *
+ * Admin access is granted when either:
+ *  - the email is listed in NEXT_PUBLIC_ADMIN_EMAILS, or
+ *  - the user's Firestore profile has `role: "admin"`.
  */
 export function useAdmin(): AdminData {
   const { user, loading: authLoading } = useAuth();
@@ -21,7 +34,6 @@ export function useAdmin(): AdminData {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    // If Firebase Auth is still initializing the user session on page reload/mount, keep loading true!
     if (authLoading) {
       setLoading(true);
       return;
@@ -30,13 +42,14 @@ export function useAdmin(): AdminData {
     const checkAdminStatus = async () => {
       if (!user) {
         setIsAdmin(false);
+        setError(null);
         setLoading(false);
         return;
       }
 
-      // Force admin status for the designated admin email
-      if (user.email === 'innovacentra@gmail.com') {
+      if (isAdminEmail(user.email)) {
         setIsAdmin(true);
+        setError(null);
         setLoading(false);
         return;
       }
@@ -45,28 +58,11 @@ export function useAdmin(): AdminData {
         setLoading(true);
         setError(null);
 
-        // Check if user exists in admin_users view
-        const { data, error: queryError } = await supabase
-          .from("admin_users")
-          .select("profile_id")
-          .eq("profile_id", user.id)
-          .single();
-
-        if (queryError) {
-          // If no rows returned, user is not admin
-          if (queryError.code === "PGRST116" || queryError.message?.includes("Failed to fetch")) {
-            setIsAdmin(false);
-          } else {
-            setError("Failed to verify admin status");
-            setIsAdmin(false);
-          }
-        } else {
-          // User found in admin_users view
-          setIsAdmin(!!data);
-        }
-      } catch (err: any) {
-        console.error("Unexpected error checking admin status:", err?.message || err);
-        setError("Unexpected error occurred");
+        const profileSnap = await getDoc(doc(db, "profiles", user.uid));
+        setIsAdmin(profileSnap.exists() && profileSnap.data()?.role === "admin");
+      } catch (err) {
+        console.error("Unexpected error checking admin status:", err);
+        setError("Failed to verify admin status");
         setIsAdmin(false);
       } finally {
         setLoading(false);
@@ -80,32 +76,17 @@ export function useAdmin(): AdminData {
 }
 
 /**
- * Utility function to check admin status without hooks
- * Useful for server-side or one-time checks
+ * Utility function to check admin status without hooks.
  */
 export async function checkIsAdmin(userId: string, email?: string): Promise<boolean> {
   if (!userId) return false;
-  if (email === 'innovacentra@gmail.com') return true;
+  if (isAdminEmail(email)) return true;
 
   try {
-    const { data, error } = await supabase
-      .from("admin_users")
-      .select("profile_id")
-      .eq("profile_id", userId)
-      .single();
-
-    if (error) {
-      // If no rows returned, user is not admin
-      if (error.code === "PGRST116") {
-        return false;
-      }
-      console.error("Error checking admin status:", error?.message || JSON.stringify(error));
-      return false;
-    }
-
-    return !!data;
-  } catch (err: any) {
-    console.error("Unexpected error checking admin status:", err?.message || err);
+    const profileSnap = await getDoc(doc(db, "profiles", userId));
+    return profileSnap.exists() && profileSnap.data()?.role === "admin";
+  } catch (err) {
+    console.error("Unexpected error checking admin status:", err);
     return false;
   }
 }

@@ -1,4 +1,4 @@
-import { db } from "@/lib/firebase/client";
+import { db, auth } from "@/lib/firebase/client";
 import { collection, doc, getDoc, getDocs, addDoc, updateDoc, deleteDoc, query, where, serverTimestamp, setDoc } from "firebase/firestore";
 import { ProductType } from "@/types";
 
@@ -110,6 +110,11 @@ export const adminProductService = {
 
   async uploadProductImage(file: File): Promise<string | null> {
     try {
+      const idToken = await auth.currentUser?.getIdToken();
+      if (!idToken) {
+        throw new Error("You must be signed in as an admin to upload images");
+      }
+
       // Re-create the File object to ensure it hasn't been corrupted or proxied by React state
       // which can cause Next.js fetch to fail to set the multipart boundary correctly.
       const safeFile = new File([file], file.name || 'upload.jpg', { type: file.type || 'image/jpeg' });
@@ -119,6 +124,9 @@ export const adminProductService = {
       
       const response = await fetch('/api/admin/upload-image', {
         method: 'POST',
+        headers: {
+          Authorization: `Bearer ${idToken}`,
+        },
         body: formData,
       });
 

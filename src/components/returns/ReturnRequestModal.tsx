@@ -173,7 +173,7 @@ export function ReturnRequestModal({
     try {
       await createReturnMutation.mutateAsync({
         order,
-        userId: user.id,
+        userId: user.uid,
         items: selectedReturnItems,
         reasonCategory,
         detailedReason: detailedReason.trim(),

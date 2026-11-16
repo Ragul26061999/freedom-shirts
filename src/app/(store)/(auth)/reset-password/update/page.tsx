@@ -15,6 +15,7 @@ export default async function UpdatePassword({
 }: UpdatePasswordProps) {
   const params = await searchParams;
   const message = params.message ? String(params.message) : null;
+  const oobCode = params.oobCode ? String(params.oobCode) : null;
 
   return (
     <div className="bg-background flex min-h-screen items-center justify-center p-4">
@@ -25,7 +26,7 @@ export default async function UpdatePassword({
             Create a new password for your account
           </CardDescription>
         </CardHeader>
-        <UpdatePasswordForm message={message} />
+        <UpdatePasswordForm message={message} oobCode={oobCode} />
       </Card>
     </div>
   );

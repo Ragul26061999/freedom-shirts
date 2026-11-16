@@ -2,252 +2,153 @@
 
 ## Overview
 
-This document outlines the API endpoints and data flow for our e-commerce application. The API is built on top of Supabase's client library with custom wrapper functions to handle error cases and business logic.
+The app has two data-access layers:
 
-## Authentication
+1. **Route handlers** under `src/app/api/**` for unauthenticated reads and privileged server work.
+2. **Firestore-backed services** under `src/services/**`, used directly by client components and React Query hooks (protected by Firestore rules) and by server components via the Firebase Admin SDK.
 
-Authentication is managed through Supabase Auth, which provides JWT tokens for authenticated requests.
+Authentication is handled by **Firebase Auth**. Privileged endpoints expect a bearer token:
 
-### Auth Endpoints
+```http
+Authorization: Bearer <firebase-id-token>
+```
 
-#### Sign Up
-- **Function**: `signUp(email, password)`
-- **Description**: Registers a new user and automatically creates their profile
-- **Returns**: User object and session if successful
+`src/lib/auth/server.ts` provides `getBearerToken`, `verifyIdToken`, `requireUser` and `requireAdmin`.
 
-#### Sign In
-- **Function**: `signIn(email, password)`
-- **Description**: Authenticates a user
-- **Returns**: User object and session if successful
+## Route Handlers
 
-#### Sign Out
-- **Function**: `signOut()`
-- **Description**: Logs out the current user
-- **Returns**: Success/failure status
+### `POST /api/auth/profile`
 
-## Profile Management
+Creates the caller's `profiles/{uid}` document if it does not exist, or fills in a missing email.
 
-### Endpoints
+- **Auth:** required (bearer token)
+- **Body:** none; the UID comes from the verified token
+- **Returns:** `{ success: true }` or `{ error }`
 
-#### Get Profile
-- **Function**: `profileService.getProfileById(userId)`
-- **Description**: Retrieves a user's profile
-- **Returns**: Profile data including username, email, avatar URL, and creation date
-- **Access Control**: Users can only access their own profiles
+### `GET /api/contact`
 
-#### Create Profile
-- **Function**: `profileService.createProfile(profileData)`
-- **Description**: Creates a new profile for a user
-- **Returns**: The newly created profile data
-- **Access Control**: Users can only create their own profiles
-- **Note**: Usually handled automatically during sign-up
-- **Default Values**:
-  - username: empty string
-  - email: empty string
-  - avatar_url: empty string
+Not implemented; contact uses `POST`.
 
-#### Update Profile
-- **Function**: `profileService.updateProfile(userId, profileData)`
-- **Description**: Updates a user's profile
-- **Parameters**:
-  - `userId`: The user's ID
-  - `profileData`: Object containing `username`, `email`, and/or `avatar_url`
-- **Returns**: Updated profile data
-- **Access Control**: Users can only update their own profiles
-- **Validation**: Email updates must match the user's verified email in auth.users
+### `POST /api/contact`
 
-## Address Management
+Validates and stores a contact message.
 
-### Endpoints
+- **Body:** `{ name, email, phone?, subject?, message }`
+- **Validation:** name (≤120), valid email (≤200), message (≤5000), phone (≤40), subject (≤200)
+- **Writes:** `contact_messages` with `status: "new"` and `createdAt`
+- **Returns:** `201 { success: true }`, `400` on validation failure
 
-#### Get User Addresses
-- **Function**: `getUserAddresses(userId)`
-- **Description**: Retrieves all addresses for a specific user
-- **Returns**: Array of address objects
-- **Access Control**: Users can only access their own addresses
+### `GET /api/products`
 
-#### Create Address
-- **Function**: `createAddress(userId, addressData)`
-- **Description**: Creates a new address for a user
-- **Parameters**:
-  - `userId`: The user's ID
-  - `addressData`: Object containing address details
-- **Returns**: The newly created address
-- **Access Control**: Users can only create addresses for themselves
+Returns products from Firestore, optionally filtered.
 
-#### Set Default Address
-- **Function**: `setDefaultAddress(userId, addressId)`
-- **Description**: Sets an address as the default for a user
-- **Parameters**:
-  - `userId`: The user's ID
-  - `addressId`: The address ID to set as default
-- **Returns**: Updated address
-- **Access Control**: Users can only modify their own addresses
+- **Query:** `?category_id=<id>`
+- **Returns:** `{ products: [...] }`
 
-## Order Management
+### `GET /api/products/[id]`
 
-### Endpoints
+Returns a single product with its category attached.
 
-#### Get User Orders
-- **Function**: `getUserOrders(userId)`
-- **Description**: Retrieves all orders for a specific user
-- **Returns**: Array of order objects
-- **Access Control**: Users can only access their own orders
+- **Returns:** `{ product }`, or `404 { product: null }`
 
-#### Create Order
-- **Function**: `createOrder(userId, orderData)`
-- **Description**: Creates a new order
-- **Parameters**:
-  - `userId`: The user's ID
-  - `orderData`: Object containing order details including items, shipping_address_id, and payment info
-- **Returns**: The newly created order
-- **Access Control**: Users can only create orders for themselves
+### `POST /api/admin/upload-image`
 
-#### Get Order Details
-- **Function**: `getOrderDetails(orderId)`
-- **Description**: Retrieves details for a specific order including all items
-- **Returns**: Order object with items array
-- **Access Control**: Users can only access their own orders
+Admin-only product image upload.
 
-#### Update Order Status
-- **Function**: `updateOrderStatus(orderId, status)`
-- **Description**: Updates the status of an order
-- **Parameters**:
-  - `orderId`: The order ID
-  - `status`: New status (one of: 'pending', 'processing', 'shipped', 'delivered', 'cancelled')
-- **Returns**: Updated order
-- **Access Control**: Users can only update their own orders, certain status changes may be admin-only
+- **Auth:** admin bearer token
+- **Body:** `multipart/form-data` with `image`
+- **Processing:** Sharp resize/re-encode; uploads to Cloudinary
+- **Returns:** `{ url }`
 
-## Product Management
+### `POST /api/profile/upload-avatar`
 
-### Endpoints
+Authenticated avatar upload.
 
-#### Get Products
-- **Function**: `getProducts()`
-- **Description**: Retrieves all products
-- **Returns**: Array of product objects
-- **Access Control**: Public access
+- **Auth:** required (bearer token)
+- **Body:** `multipart/form-data` with `image`
+- **Limits:** 5 MB; JPG/PNG/WebP/GIF/AVIF
+- **Processing:** Sharp rotate + 512×512 cover + WebP; uploads to `ecommerce/avatars/{uid}`
+- **Returns:** `{ url }`
 
-#### Get Product Details
-- **Function**: `getProductDetails(productId)`
-- **Description**: Retrieves details for a specific product
-- **Returns**: Product object
-- **Access Control**: Public access
+### `POST /api/webhooks/polar`
 
-#### Get Products by Category
-- **Function**: `getProductsByCategory(categoryId)`
-- **Description**: Retrieves all products in a category
-- **Returns**: Array of product objects
-- **Access Control**: Public access
+Receives Polar payment webhooks.
 
-## Review Management
+- **Auth:** Standard Webhooks HMAC signature (`webhook-id`, `webhook-timestamp`, `webhook-signature`)
+- **Replay protection:** timestamp must be within 5 minutes
+- **Behaviour:** verifies the signature against the raw body, then confirms the order, records the payment ID and decrements stock idempotently
+- **Runtime:** Node.js
 
-### Endpoints
+## Data Services
 
-#### Get Product Reviews
-- **Function**: `getProductReviews(productId)`
-- **Description**: Retrieves all reviews for a specific product
-- **Returns**: Array of review objects with user information
-- **Access Control**: Public access
+### Categories
 
-#### Create Review
-- **Function**: `createReview(userId, productId, reviewData)`
-- **Description**: Creates a new review for a product
-- **Parameters**:
-  - `userId`: The user's ID
-  - `productId`: The product ID
-  - `reviewData`: Object containing rating and optional comment
-- **Returns**: The newly created review
-- **Access Control**: Users can only create reviews for themselves
+- `categoryService.getCategories()` — client Firestore read
+- `categoryService.getCategoryById(id)` — client Firestore read
+- `categoryServerService.getCategories()` — server read for the homepage; returns `[]` on failure so rendering never breaks
+
+### Products
+
+- `productService` — client reads and queries
+- `productServerService` — server-side reads used by detail pages
+
+### Cart
+
+- `cartService` — active cart lookup, item add/update/remove, cart creation and clearing, all in Firestore
+
+### Orders
+
+- `orderServerService.getOrders(userId)` — joins orders, items and products for the dashboard/profile
+- `cancelOrderServer.cancelOrderWithRestock(orderId, reason, idToken)` — verifies the token, checks ownership and status, restocks each product and writes `stock_history` in a Firestore batch
+
+### Profile
+
+- `profileService.getProfileById`, `getCurrentProfile`, `updateProfile`, `updateCurrentProfile`, `deleteProfile`
+- `profileService.uploadAvatar` — posts to `/api/profile/upload-avatar`
+- `profileServerService` — server reads/writes for profile pages
+
+### Homepage Settings
+
+- `getHomepageSettings(sectionName)` — server action reading `homepage_settings/{sectionName}`
+- `updateHomepageSettings(sectionName, contentJson, idToken)` — server action that verifies an admin token, writes the section and revalidates `/`
+
+### Admin
+
+- `adminProductService`, `adminOrderService`, `adminReturnService`, `adminUserService`, `adminUserServerService`, `shippingService`
+- `erpService.getProductStockHistory(productId)` — reads `stock_history`
+
+### Returns & Reviews
+
+- `returnService` — create/read/update return requests
+- `reviewService` — list/create product reviews
 
 ## Error Handling
 
-All API functions use a consistent error handling approach:
+`src/utils/errorHandling.ts` normalises errors for React Query and UI:
 
-1. Database errors (Postgrest errors) are caught and processed
-2. Row-level security violations are identified and handled appropriately
-3. Errors are logged to the console with context
-4. User-friendly toast notifications are shown for errors that impact the user experience
-
-### Common Error Types
-
-- `PGRST116`: No rows returned
-- `42501`: Row-level security policy violation
-- Network errors
-- Authentication errors
+- `toUserFacingQueryError(subject, error)` — maps network/permission failures to readable messages
+- `handleCommonErrors(error, options)` — logs and optionally shows a toast
+- `trySafe(fn, options)` — wraps an async call with a fallback
+- `UNABLE_TO_REACH_DATABASE` — shared substring for connectivity errors
 
 ## Data Flow Examples
 
-### Profile Creation Flow
+### Sign-up / First Profile
 
-1. User signs up with email/password
-2. Auth system creates user in auth.users table
-3. `ensureUserProfile` is called to create entry in profiles table
-4. RLS policy validates that user can only create their own profile
-5. Profile is created with default values (empty strings for username, email, and avatar_url)
-6. Profile is returned to the client
+1. The client creates a Firebase Auth user.
+2. The client posts to `/api/auth/profile` with its ID token.
+3. The route creates `profiles/{uid}` with `role: "admin"` for configured admin emails, otherwise `"user"`.
 
-### Profile Update Flow
+### Checkout
 
-1. User updates their profile information
-2. `profileService.updateProfile` is called with user ID and update data
-3. RLS policy validates that user can only update their own profile
-4. If email is being updated, it must match their auth.users email
-5. Profile is updated and returned to the client
+1. The client builds an order payload from the Firestore cart.
+2. The checkout server action re-fetches prices/stock server-side and writes the order in a transaction.
+3. Polar checkout redirects the user; the webhook confirms payment and decrements stock.
+4. COD orders are written with a pending payment state.
 
-### Order Creation Flow
+### Order Cancellation
 
-1. User adds items to cart
-2. User proceeds to checkout
-3. `createOrder` is called with user ID and order details
-4. RLS policy validates that user can only create orders for themselves
-5. Order and order items are created in the database
-6. Order details are returned to the client
-
-## Extending the API
-
-When adding new API endpoints:
-
-1. Create functions in appropriate files under `src/db/`
-2. Follow the established pattern for error handling
-3. Ensure proper RLS policies are in place
-4. Update this documentation
-
-## Testing the API
-
-Manual testing can be done through the browser console:
-
-```javascript
-// Example: Get current user's profile
-const { data, error } = await supabase
-  .from('profiles')
-  .select('*')
-  .eq('profile_id', 'user-id-here')
-  .single();
-
-console.log(data, error);
-
-// Example: Get products in a category
-const { data, error } = await supabase
-  .from('products')
-  .select('*')
-  .eq('category_id', 1);
-
-console.log(data, error);
-
-// Example: Get order with items
-const { data, error } = await supabase
-  .from('orders')
-  .select(`
-    *,
-    order_items:order_items(
-      *,
-      product:products(product_id, title, image)
-    )
-  `)
-  .eq('id', 1)
-  .eq('user_id', 'user-id-here')
-  .single();
-
-console.log(data, error);
-``` 
+1. The client requests cancellation with its ID token.
+2. `cancelOrderWithRestock` verifies the token and order ownership.
+3. Products are restocked and `stock_history` entries are written in one batch.
+4. The order is marked `cancelled` with the supplied reason.

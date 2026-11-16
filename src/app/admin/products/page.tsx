@@ -15,6 +15,7 @@ import {
   AlertTriangle,
   Eye,
   RefreshCw,
+  Tag,
 } from "lucide-react";
 import {
   adminProductService,
@@ -23,6 +24,7 @@ import {
   UpdateProductData,
 } from "@/services/admin/adminProductService";
 import { formatCurrency } from "@/utils/formatCurrency";
+import { colorToCss } from "@/utils/colorToCss";
 import { toast } from "sonner";
 import Image from "next/image";
 import Link from "next/link";
@@ -31,6 +33,23 @@ import { DeleteConfirmModal } from "@/components/admin/DeleteConfirmModal";
 
 // Auto-refresh interval: 15 seconds to keep stock counts current
 const AUTO_REFRESH_INTERVAL = 15_000;
+
+// Variant sizes are inconsistent in the database: newer products store
+// { size, stock } objects, older ones store plain strings like "S".
+// Normalize both shapes so the UI never renders "undefined".
+function normalizeSizeRow(raw: unknown): { label: string; stock: number | null } {
+  if (typeof raw === "string") {
+    return { label: raw, stock: null };
+  }
+  if (raw && typeof raw === "object") {
+    const o = raw as { size?: unknown; stock?: unknown };
+    return {
+      label: o.size != null ? String(o.size) : "Size",
+      stock: typeof o.stock === "number" ? o.stock : null,
+    };
+  }
+  return { label: "?", stock: null };
+}
 
 export default function AdminProductsPage() {
   const [products, setProducts] = useState<ProductWithDetails[]>([]);
@@ -211,21 +230,58 @@ export default function AdminProductsPage() {
 
       {/* Products Grid */}
       <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
-        {filteredProducts.map((product) => (
-          <Card key={product.product_id} className="overflow-hidden">
-            <div className="relative h-48 bg-gray-100">
-              {product.image ? (
+        {filteredProducts.map((product) => {
+          const primaryImage =
+            product.image ||
+            product.variants?.find((v) => v.images && v.images.length > 0)
+              ?.images?.[0];
+          const isOnSale =
+            !!product.discount_price &&
+            product.discount_price > 0 &&
+            product.discount_price <= 100;
+          const basePrice = product.price || 0;
+          const currentPrice = isOnSale
+            ? basePrice - basePrice * (product.discount_price! / 100)
+            : basePrice;
+          const hasVariants =
+            !!product.variants && product.variants.length > 0;
+
+          return (
+          <Card key={product.product_id} className="group overflow-hidden transition-shadow hover:shadow-lg">
+            <div className="relative aspect-[4/5] w-full bg-white">
+              {primaryImage ? (
                 <Image
-                  src={product.image}
+                  src={primaryImage}
                   alt={product.title}
                   fill
-                  className="object-cover"
+                  sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+                  className="object-contain p-3 transition-transform duration-500 group-hover:scale-[1.03]"
                 />
               ) : (
                 <div className="text-muted-foreground flex h-full items-center justify-center">
                   <Package className="h-12 w-12" />
                 </div>
               )}
+
+              {/* Category badge */}
+              <div className="absolute top-2 left-2">
+                {product.category?.name ? (
+                  <Badge
+                    variant="secondary"
+                    className="bg-background/80 text-foreground backdrop-blur-sm"
+                  >
+                    <Tag className="mr-1 h-3 w-3" />
+                    {product.category.name}
+                  </Badge>
+                ) : (
+                  <Badge
+                    variant="outline"
+                    className="bg-background/80 backdrop-blur-sm"
+                  >
+                    Uncategorized
+                  </Badge>
+                )}
+              </div>
 
               {/* Stock badge */}
               <div className="absolute top-2 right-2">
@@ -252,11 +308,26 @@ export default function AdminProductsPage() {
               <CardTitle className="line-clamp-2 text-lg">
                 {product.title}
               </CardTitle>
-              <div className="flex items-center justify-between">
-                <span className="text-primary text-2xl font-bold">
-                  {formatCurrency(product.price)}
-                </span>
-                <span className="text-muted-foreground text-sm">
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex flex-wrap items-baseline gap-2">
+                  <span className="text-primary text-2xl font-bold">
+                    {formatCurrency(currentPrice)}
+                  </span>
+                  {isOnSale && (
+                    <>
+                      <span className="text-muted-foreground text-sm line-through">
+                        {formatCurrency(basePrice)}
+                      </span>
+                      <Badge
+                        variant="secondary"
+                        className="bg-amber-100 text-amber-800 dark:bg-amber-500/10 dark:text-amber-400"
+                      >
+                        -{product.discount_price}%
+                      </Badge>
+                    </>
+                  )}
+                </div>
+                <span className="text-muted-foreground shrink-0 text-sm">
                   Stock: {product.stock}
                 </span>
               </div>
@@ -266,6 +337,62 @@ export default function AdminProductsPage() {
               <p className="text-muted-foreground mb-4 line-clamp-2 text-sm">
                 {product.description}
               </p>
+
+              {/* Variant details: colors + sizes with stock */}
+              {hasVariants ? (
+                <div className="mb-4 space-y-2">
+                  <p className="text-muted-foreground text-[11px] font-semibold uppercase tracking-wider">
+                    Available Variants
+                  </p>
+                  {product.variants!.map((variant, vi) => (
+                    <div
+                      key={vi}
+                      className="rounded-lg border border-border/60 bg-muted/30 p-2"
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <span
+                            className="inline-block h-3.5 w-3.5 rounded-full border border-black/10"
+                            style={{ background: colorToCss(variant.color) }}
+                          />
+                          <span className="text-xs font-medium capitalize">
+                            {variant.color.trim()}
+                          </span>
+                        </div>
+                        <span className="text-muted-foreground text-[10px]">
+                          {variant.images?.length ?? 0} image
+                          {(variant.images?.length ?? 0) === 1 ? "" : "s"}
+                        </span>
+                      </div>
+                      {variant.sizes && variant.sizes.length > 0 && (
+                        <div className="mt-1.5 flex flex-wrap gap-1">
+                          {variant.sizes.map((rawSize, si) => {
+                            const { label, stock } = normalizeSizeRow(rawSize);
+                            const inStock = stock === null || stock > 0;
+                            return (
+                              <span
+                                key={si}
+                                className={`inline-flex items-center rounded-md px-1.5 py-0.5 text-[10px] font-medium ${
+                                  inStock
+                                    ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400"
+                                    : "bg-red-50 text-red-600 line-through dark:bg-red-500/10"
+                                }`}
+                              >
+                                {label}
+                                {stock !== null ? ` · ${stock}` : ""}
+                              </span>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-muted-foreground mb-4 text-xs italic">
+                  No size/color variants — single product.
+                </p>
+              )}
 
               <div className="mb-4 space-y-2">
                 {product.sku && (
@@ -319,7 +446,8 @@ export default function AdminProductsPage() {
               </div>
             </CardContent>
           </Card>
-        ))}
+          );
+        })}
       </div>
 
       {filteredProducts.length === 0 && !loading && (

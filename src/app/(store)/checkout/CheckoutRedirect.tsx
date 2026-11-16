@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState, FormEvent } from "react";
+import { useEffect, useState, useRef, FormEvent } from "react";
 import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,6 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { createPolarCheckout, getShippingRatesAction } from "./actions";
 import { useCart } from "@/context/CartContext";
 import { useAuth } from "@/context/AuthContext";
+import { auth } from "@/lib/firebase/client";
 
 export default function CheckoutRedirect() {
   const router = useRouter();
@@ -20,6 +22,12 @@ export default function CheckoutRedirect() {
   const [isCalculating, setIsCalculating] = useState(false);
   const [shippingCost, setShippingCost] = useState(0);
   const [paymentMethod, setPaymentMethod] = useState("Polar / Credit Card");
+  // Stable key so double-clicks / retries cannot create duplicate orders.
+  const idempotencyKey = useRef<string>(
+    typeof crypto !== "undefined" && "randomUUID" in crypto
+      ? crypto.randomUUID()
+      : `checkout_${Date.now()}_${Math.random().toString(36).slice(2)}`,
+  );
 
   const [address, setAddress] = useState({
     street: "",
@@ -94,36 +102,49 @@ export default function CheckoutRedirect() {
     }, 500);
 
     return () => clearTimeout(timeoutId);
-  }, [address.state, address.district, address.city]);
+  }, [address.state, address.district, address.city, ratesData]);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
 
     if (!address.street || !address.city || !address.state || !address.zip_code || !address.phone) {
-      console.error("Please fill in all required fields");
+      toast.error("Please fill in all required fields");
       return;
     }
 
     setIsLoading(true);
     try {
+      const firebaseUser = auth.currentUser;
+      if (!firebaseUser) {
+        toast.error("Please sign in again to place your order");
+        setIsLoading(false);
+        return;
+      }
+      const idToken = await firebaseUser.getIdToken();
+
       const result = await createPolarCheckout({
-        userId: user?.id || user?.uid,
+        idToken,
         userEmail: user?.email,
         shippingCharge: shippingCost,
         address: address,
-        paymentMethod: paymentMethod
+        paymentMethod: paymentMethod,
+        idempotencyKey: idempotencyKey.current,
       });
 
       if (!result.success || !result.checkoutUrl) {
         throw new Error(result.error || "Failed to create checkout session");
       }
 
-      // Redirect to Polar hosted checkout
+      // Redirect to the payment page (or the success page for COD).
       window.location.href = result.checkoutUrl;
     } catch (err) {
       console.error("Error creating checkout session:", err);
+      toast.error(
+        err instanceof Error
+          ? err.message
+          : "Failed to start checkout. Please try again.",
+      );
       setIsLoading(false);
-      console.error(err instanceof Error ? err.message : "Failed to start checkout. Please try again.");
     }
   };
 

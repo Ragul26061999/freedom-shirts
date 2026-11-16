@@ -17,10 +17,14 @@ export function useFirebaseAuth() {
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
-        // Map Firebase user to look somewhat like Supabase user for backwards compatibility
+        // Expose a small compatibility shape for legacy consumers
         const mappedUser = {
           id: firebaseUser.uid,
+          uid: firebaseUser.uid,
           email: firebaseUser.email,
+          emailVerified: firebaseUser.emailVerified,
+          displayName: firebaseUser.displayName,
+          photoURL: firebaseUser.photoURL,
           user_metadata: {},
           app_metadata: {},
           aud: 'authenticated',
@@ -41,14 +45,18 @@ export function useFirebaseAuth() {
 
   const ensureUserProfile = async (firebaseUser: FirebaseUser) => {
     try {
-      const userEmail = firebaseUser.email || '';
-      await fetch('/api/auth/profile', {
+      const idToken = await firebaseUser.getIdToken();
+      const response = await fetch('/api/auth/profile', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          Authorization: `Bearer ${idToken}`,
         },
-        body: JSON.stringify({ uid: firebaseUser.uid, email: userEmail }),
+        body: JSON.stringify({}),
       });
+      if (!response.ok) {
+        console.warn('Could not sync user profile:', response.status);
+      }
     } catch (error: any) {
       console.error('Error in ensureUserProfile:', error?.message || JSON.stringify(error));
     }

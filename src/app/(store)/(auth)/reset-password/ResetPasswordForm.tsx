@@ -2,13 +2,14 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { CardContent, CardFooter } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { supabaseAuth } from "@/lib/supabase/client";
+import { sendPasswordResetEmail } from "firebase/auth";
+import { auth } from "@/lib/firebase/client";
 import { toast } from "sonner";
-import { useRouter } from "next/navigation";
 
 export function ResetPasswordForm({ message }: { message: string | null }) {
   const router = useRouter();
@@ -30,29 +31,17 @@ export function ResetPasswordForm({ message }: { message: string | null }) {
     try {
       setLoading(true);
 
-      // Get the current URL to build the redirect URL
-      const origin = window.location.origin;
-      // The redirectTo should be the change password page
-      const redirectTo = `${origin}/reset-password/update`;
-
-      // According to Supabase docs: resetPasswordForEmail sends a reset password email
-      const { error } = await supabaseAuth.resetPasswordForEmail(email, {
-        redirectTo,
+      await sendPasswordResetEmail(auth, email.trim(), {
+        url: `${window.location.origin}/reset-password/update`,
+        handleCodeInApp: false,
       });
-
-      if (error) {
-        throw error;
-      }
 
       setSuccess(true);
       toast.success("Password reset email sent! Check your inbox.");
 
-      // Redirect to a page that explains the user should check their email
       setTimeout(() => {
-        router.push(
-          "/reset-password/update?email=" + encodeURIComponent(email),
-        );
-      }, 2000);
+        router.push("/reset-password/confirmation");
+      }, 1500);
     } catch (error: unknown) {
       const errorMessage =
         error instanceof Error
@@ -81,8 +70,7 @@ export function ResetPasswordForm({ message }: { message: string | null }) {
         {success && (
           <div className="rounded-md bg-green-100 p-3 text-sm text-green-800">
             We&apos;ve sent you an email with a link to reset your password.
-            Please check your inbox. You&apos;ll be redirected to the password
-            update page.
+            Please check your inbox.
           </div>
         )}
         <div className="space-y-2">

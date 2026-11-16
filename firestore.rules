@@ -1,36 +1,39 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    
-    // Check if user is the store admin
+
+    // Keep this list in sync with ADMIN_EMAILS in the server environment.
+    // `request.auth.token.admin == true` supports custom-claim based admins.
     function isAdmin() {
-      return request.auth != null && request.auth.token.email == 'innovacentra@gmail.com';
+      return request.auth != null && (
+        request.auth.token.admin == true ||
+        request.auth.token.email == 'innovacentra@gmail.com'
+      );
     }
 
-    // Check if user is accessing their own data
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
     function isOwner(userId) {
-      return request.auth != null && request.auth.uid == userId;
+      return isSignedIn() && request.auth.uid == userId;
     }
 
-    // Give admin full access to everything by default
+    // ── Admin back-office ──────────────────────────────────────────────────
     match /{document=**} {
       allow read, write: if isAdmin();
     }
 
-    // Profiles: Anyone can read (needed for reviews). Users can write their own. Admin can do everything.
+    // ── Profiles ───────────────────────────────────────────────────────────
+    // Public read is required because reviews are joined with profile names.
+    // Never store sensitive PII (phone, GSTIN, bank) on this document.
     match /profiles/{userId} {
       allow read: if true;
-      allow write: if isOwner(userId) || isAdmin();
+      allow create, update: if isOwner(userId) || isAdmin();
+      allow delete: if isAdmin();
     }
 
-    // Reviews: Anyone can read. Authenticated users can create/update/delete their own.
-    match /reviews/{reviewId} {
-      allow read: if true;
-      allow create: if request.auth != null && request.auth.uid == request.resource.data.user_id;
-      allow update, delete: if request.auth != null && request.auth.uid == resource.data.user_id;
-    }
-
-    // Products & Categories: Anyone can read. Only admin can write.
+    // ── Catalog ────────────────────────────────────────────────────────────
     match /products/{document=**} {
       allow read: if true;
       allow write: if isAdmin();
@@ -39,30 +42,91 @@ service cloud.firestore {
       allow read: if true;
       allow write: if isAdmin();
     }
+    match /shipping_rates/{document=**} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
 
-    // Carts: Anyone can create/read/update a cart (for guest shopping)
+    // ── Reviews ────────────────────────────────────────────────────────────
+    match /reviews/{reviewId} {
+      allow read: if true;
+      allow create: if isSignedIn()
+        && request.resource.data.user_id == request.auth.uid;
+      allow update, delete: if isSignedIn()
+        && resource.data.user_id == request.auth.uid;
+    }
+
+    // ── Cart (authenticated, owner only) ───────────────────────────────────
     match /carts/{cartId} {
-      allow read, write: if true; 
+      allow read, update, delete: if isSignedIn()
+        && resource.data.user_id == request.auth.uid;
+      allow create: if isSignedIn()
+        && request.resource.data.user_id == request.auth.uid;
     }
-    
-    // Cart Items collection
     match /cart_items/{itemId} {
-      allow read, write: if true;
+      function ownsParentCart() {
+        return isSignedIn()
+          && get(/databases/$(database)/documents/carts/$(request.resource.data.cart_id)).data.user_id == request.auth.uid;
+      }
+      function ownsExistingParentCart() {
+        return isSignedIn()
+          && get(/databases/$(database)/documents/carts/$(resource.data.cart_id)).data.user_id == request.auth.uid;
+      }
+      allow read: if ownsExistingParentCart();
+      allow create: if ownsParentCart();
+      allow update: if ownsExistingParentCart()
+        && request.resource.data.cart_id == resource.data.cart_id;
+      allow delete: if ownsExistingParentCart();
     }
 
-    // Orders: Anyone can create (guest checkout). Users read their own. Admin does all.
+    // ── Orders ─────────────────────────────────────────────────────────────
+    // Orders are created exclusively by the server (checkout action / webhook).
     match /orders/{orderId} {
-      allow create: if true;
-      allow read: if (request.auth != null && resource.data.user_id == request.auth.uid) || isAdmin();
-      allow update: if (request.auth != null && resource.data.user_id == request.auth.uid) || isAdmin();
+      allow read: if isAdmin() || isOwner(resource.data.user_id);
+      allow create: if false;
       allow delete: if isAdmin();
+      allow update: if isAdmin() || (
+        isOwner(resource.data.user_id) &&
+        request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['has_return', 'return_status', 'return_id', 'status', 'cancellation_reason', 'updated_at'])
+      );
     }
-    
-    // Returns: Users can create and read their own. Admin does all.
+    match /order_items/{itemId} {
+      allow read: if isAdmin() || isOwner(
+        get(/databases/$(database)/documents/orders/$(resource.data.order_id)).data.user_id
+      );
+      allow write: if isAdmin();
+    }
+    match /order_status_history/{entryId} {
+      allow read: if isAdmin();
+      allow write: if isAdmin();
+    }
+
+    // ── Returns ────────────────────────────────────────────────────────────
     match /returns/{returnId} {
-      allow create: if request.auth != null && request.resource.data.user_id == request.auth.uid;
-      allow read: if (request.auth != null && resource.data.user_id == request.auth.uid) || isAdmin();
+      allow create: if isSignedIn()
+        && request.resource.data.user_id == request.auth.uid;
+      allow read: if isAdmin() || isOwner(resource.data.user_id);
       allow update, delete: if isAdmin();
+    }
+
+    // ── Addresses (server-managed at checkout; users may manage their own) ──
+    match /addresses/{addressId} {
+      allow read, update, delete: if isAdmin() || isOwner(resource.data.user_id);
+      allow create: if isAdmin() || isOwner(request.resource.data.user_id);
+    }
+
+    // ── Platform tables ────────────────────────────────────────────────────
+    match /admin_users/{document=**} {
+      allow read, write: if isAdmin();
+    }
+    match /audit_logs/{document=**} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+    match /notifications/{notificationId} {
+      allow read: if isAdmin() || isOwner(resource.data.user_id);
+      allow write: if isAdmin();
     }
   }
 }

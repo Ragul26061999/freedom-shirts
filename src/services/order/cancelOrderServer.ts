@@ -1,88 +1,98 @@
-"use server"
+"use server";
 
-import { createClient } from "@supabase/supabase-js";
-import { Database } from "@/types/supabase";
+import { db } from "@/lib/firebase/admin";
+import { verifyIdToken } from "@/lib/auth/server";
 
-export async function cancelOrderWithRestock(orderId: string, reason: string, userId: string) {
+/**
+ * Cancel an order and restock its items.
+ *
+ * The caller's Firebase ID token is verified server-side, so a user can only
+ * cancel their own order regardless of any client-supplied ids.
+ */
+export async function cancelOrderWithRestock(
+  orderId: string,
+  reason: string,
+  idToken: string
+) {
   try {
-    // Initialize admin client to bypass RLS
-    const supabaseAdmin = createClient<Database>(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!
-    );
+    const user = await verifyIdToken(idToken);
+    if (!user) {
+      throw new Error("You must be signed in to cancel an order.");
+    }
 
-    // 1. Verify the order belongs to the user and is not already cancelled
-    const { data: order, error: fetchError } = await supabaseAdmin
-      .from("orders")
-      .select("*, order_items(*)")
-      .eq("id", orderId)
-      .eq("user_id", userId)
-      .single();
+    if (!db || typeof db.collection !== "function") {
+      throw new Error("Database is not available.");
+    }
 
-    if (fetchError || !order) {
-      throw new Error("Order not found or you don't have permission to cancel it.");
+    const orderRef = db.collection("orders").doc(orderId);
+    const orderSnap = await orderRef.get();
+
+    if (!orderSnap.exists) {
+      throw new Error("Order not found.");
+    }
+
+    const order = orderSnap.data()!;
+
+    if (order.user_id !== user.uid) {
+      throw new Error("You don't have permission to cancel this order.");
     }
 
     if (order.status === "cancelled") {
       throw new Error("Order is already cancelled.");
     }
 
-    // 2. Update order status to cancelled
-    const { error: cancelError } = await supabaseAdmin
-      .from("orders")
-      .update({
-        status: "cancelled",
-        cancellation_reason: reason,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", orderId);
-
-    if (cancelError) {
-      throw new Error(`Failed to update order status: ${cancelError.message}`);
+    if (order.status === "delivered" || order.status === "shipped") {
+      throw new Error("This order can no longer be cancelled.");
     }
 
-    // 3. Restock products by calling process_fifo_sale or by directly logging to stock history
-    // Since process_fifo_sale handles deduction, we should ideally have a reverse for restocking,
-    // but the easiest is to just increment product stock and log to stock_history.
-    if (order.order_items && order.order_items.length > 0) {
-      for (const item of order.order_items) {
-        // Fetch current product stock
-        const { data: product } = await supabaseAdmin
-          .from("products")
-          .select("stock")
-          .eq("product_id", item.product_id)
-          .single();
+    const itemsSnap = await db
+      .collection("order_items")
+      .where("order_id", "==", orderId)
+      .get();
 
-        if (product) {
-          const newStock = product.stock + item.quantity;
-          
-          // Update product stock
-          await supabaseAdmin
-            .from("products")
-            .update({ stock: newStock })
-            .eq("product_id", item.product_id);
+    const batch = db.batch();
 
-          // Log in stock_history
-          await supabaseAdmin
-            .from("stock_history")
-            .insert({
-              product_id: item.product_id,
-              action: "customer_return",
-              previous_quantity: product.stock,
-              new_quantity: newStock,
-              difference: item.quantity,
-              reason: `Cancelled order: ${orderId}`,
-            });
-        }
-      }
+    // Restock each purchased item and record the movement.
+    for (const itemDoc of itemsSnap.docs) {
+      const item = itemDoc.data();
+      if (!item.product_id) continue;
+
+      const productRef = db.collection("products").doc(String(item.product_id));
+      const productSnap = await productRef.get();
+      if (!productSnap.exists) continue;
+
+      const previousQuantity = Number(productSnap.data()?.stock ?? 0);
+      const quantity = Number(item.quantity ?? 0);
+      const newQuantity = previousQuantity + quantity;
+
+      batch.update(productRef, { stock: newQuantity, updated_at: new Date() });
+
+      const historyRef = db.collection("stock_history").doc();
+      batch.set(historyRef, {
+        product_id: String(item.product_id),
+        action: "customer_return",
+        previous_quantity: previousQuantity,
+        new_quantity: newQuantity,
+        difference: quantity,
+        reason: `Cancelled order: ${orderId}`,
+        created_at: new Date(),
+      });
     }
+
+    batch.update(orderRef, {
+      status: "cancelled",
+      cancellation_reason: reason,
+      updated_at: new Date(),
+    });
+
+    await batch.commit();
 
     return { success: true, orderId };
   } catch (error) {
     console.error("Error cancelling order with restock:", error);
-    return { 
-      success: false, 
-      error: error instanceof Error ? error.message : "Failed to cancel order" 
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Failed to cancel order",
     };
   }
 }

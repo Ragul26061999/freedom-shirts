@@ -33,7 +33,7 @@ export function OrderCard({ order, onUpdate }: OrderCardProps) {
       return;
     }
     
-    if (!user?.id) {
+    if (!user?.uid) {
       toast.error("You must be logged in to cancel an order");
       return;
     }
@@ -42,7 +42,7 @@ export function OrderCard({ order, onUpdate }: OrderCardProps) {
       await cancelOrder.mutateAsync({
         orderId: order.id.toString(),
         reason: cancelReason,
-        userId: user.id,
+        userId: user.uid,
       });
       toast.success("Order cancelled and items restocked");
       setIsCancelModalOpen(false);

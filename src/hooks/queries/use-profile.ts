@@ -7,7 +7,12 @@ import {
   useQueryClient,
   UseQueryOptions,
 } from '@tanstack/react-query';
-import { getClientUser } from '@/lib/supabase/clientUtils';
+import { auth } from '@/lib/firebase/client';
+
+function getClientUser() {
+  const user = auth.currentUser;
+  return user ? { id: user.uid, uid: user.uid, email: user.email } : null;
+}
 
 // Query Keys
 export const profileKeys = {

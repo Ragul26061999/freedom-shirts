@@ -13,7 +13,7 @@ function SuccessContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const queryClient = useQueryClient();
-  const checkoutId = searchParams.get("checkout_id");
+  const checkoutId = searchParams.get("order_id") || searchParams.get("checkout_id");
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {

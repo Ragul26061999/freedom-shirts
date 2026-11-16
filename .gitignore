@@ -30,8 +30,23 @@ next-env.d.ts
 dist
 
 .cursor
-.env
 
 .agents
 .claude
-fsc-dressshop-firebase-adminsdk-fbsvc-6e5aa995bb.json
+
+# Environment files & secrets — never commit these
+.env
+.env.*
+!.env.example
+*.pem
+*-firebase-adminsdk-*.json
+firebase-adminsdk-*.json
+serviceAccount*.json
+
+# Generated build artefacts
+.next
+out
+tsconfig.tsbuildinfo
+*.tsbuildinfo
+.vercel
+.turbo

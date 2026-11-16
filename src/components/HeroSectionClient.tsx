@@ -4,18 +4,32 @@ import Link from "next/link";
 import { ArrowRight, ShoppingBag, Edit } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useState, useEffect } from "react";
-import { useAuth } from "@/context/AuthContext";
-import { updateHomepageSettings } from "@/services/homepage";
+import { useAdmin } from "@/hooks/useAdmin";
+import { updateHomepageSettings } from "@/services/homepage/updateHomepageSettings";
+import { auth } from "@/lib/firebase/client";
 import { toast } from "sonner";
 
-export function HeroSectionClient({ initialSlides }: { initialSlides: any[] }) {
-  const { user } = useAuth();
+export interface HeroSlide {
+  badge: string;
+  heading: string;
+  highlight: string;
+  sub: string;
+  cta: string;
+  ctaHref: string;
+  secondary: string;
+  secondaryHref: string;
+  discount: string;
+  bg: string;
+  bgImage: string;
+  accent: string;
+  accentText: string;
+}
+
+export function HeroSectionClient({ initialSlides }: { initialSlides: HeroSlide[] }) {
+  const { isAdmin } = useAdmin();
   const [slides, setSlides] = useState(initialSlides);
   const [currentSlide, setCurrentSlide] = useState(0);
   const [isEditing, setIsEditing] = useState(false);
-
-  // Check if the current user is the admin
-  const isAdmin = user?.email === 'innovacentra@gmail.com';
 
   useEffect(() => {
     if (isEditing) return; // Pause carousel while editing
@@ -29,13 +43,18 @@ export function HeroSectionClient({ initialSlides }: { initialSlides: any[] }) {
 
   const handleSave = async () => {
     try {
-      const result = await updateHomepageSettings("hero_section", slides);
+      const token = await auth.currentUser?.getIdToken();
+      if (!token) throw new Error("You must be signed in as an admin.");
+      const result = await updateHomepageSettings("hero_section", slides, token);
       if (result.success) {
         toast.success("Hero section updated successfully!");
         setIsEditing(false);
       }
-    } catch (error: any) {
-      console.error("Failed to update hero section: " + error.message);
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Unknown error";
+      console.error("Failed to update hero section: " + message);
+      toast.error("Could not save the hero section. Please try again.");
     }
   };
 

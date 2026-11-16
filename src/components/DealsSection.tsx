@@ -74,7 +74,7 @@ export function DealsSection() {
         onMouseLeave={() => setIsPaused(false)}
       >
         {/* Aspect Ratio Box: Responsive Widescreen Rectangular Banner */}
-        <div className="relative w-full h-[220px] sm:h-[300px] md:h-[400px] lg:h-[480px] select-none">
+        <div className="relative w-full h-[200px] sm:h-[280px] md:h-[370px] lg:h-[450px] select-none">
           <AnimatePresence>
             <motion.div
               key={activeBanner.id}

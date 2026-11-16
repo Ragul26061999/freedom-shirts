@@ -4,9 +4,18 @@ import { useRef, useState, useEffect } from "react";
 import Link from "next/link";
 import { useCategories } from "@/hooks/queries";
 import { ChevronLeft, ChevronRight } from "lucide-react";
+import type { CategoryType } from "@/types";
 
-export function CategoryBar() {
-  const { data: categories } = useCategories();
+export function CategoryBar({
+  initialCategories = [],
+}: {
+  initialCategories?: CategoryType[];
+}) {
+  // Seed React Query with categories that were rendered on the server, so the
+  // bar is visible in the very first paint instead of appearing after hydration.
+  const { data: categories } = useCategories({
+    initialData: initialCategories,
+  });
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [showLeftArrow, setShowLeftArrow] = useState(false);
   const [showRightArrow, setShowRightArrow] = useState(true);

@@ -4,14 +4,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useState, useEffect, ChangeEvent, useRef } from "react";
-import { User } from "@supabase/supabase-js";
 import { EmailChangeModal } from "@/components/EmailChangeModal";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { toast } from "sonner";
 import { profileService } from "@/services/profile/profileService";
 
 interface ProfileCardProps {
-  user: User;
+  user: { uid: string; email?: string | null };
   username: string;
   setUsername: (value: string) => void;
   avatarUrl: string;
@@ -109,7 +108,7 @@ export function ProfileCard({
 
       // Use profile service to upload avatar and pass current avatar URL to delete previous avatars
       const publicUrl = await profileService.uploadAvatar(
-        user.id,
+        user.uid,
         file,
         avatarUrl,
       );
@@ -289,7 +288,7 @@ export function ProfileCard({
                 })}
               </span>
             )}
-            <span className="block">Profile ID: {user?.id}</span>
+            <span className="block">Profile ID: {user?.uid}</span>
           </div>
         </div>
         <Button

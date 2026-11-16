@@ -3,27 +3,43 @@
 import { useState } from "react";
 import Link from "next/link";
 import { ArrowRight, Edit } from "lucide-react";
-import { useAuth } from "@/context/AuthContext";
-import { updateHomepageSettings } from "@/services/homepage";
+import { useAdmin } from "@/hooks/useAdmin";
+import { updateHomepageSettings } from "@/services/homepage/updateHomepageSettings";
+import { auth } from "@/lib/firebase/client";
 import { toast } from "sonner";
 
-export default function PromoBannersClient({ initialBanners }: { initialBanners: any[] }) {
-  const { user } = useAuth();
+export interface PromoBanner {
+  id: number | string;
+  tag: string;
+  title: string;
+  subtitle: string;
+  buttonText: string;
+  buttonLink: string;
+  icon: string;
+  gradient: string;
+  borderColor: string;
+  tagColor: string;
+}
+
+export default function PromoBannersClient({ initialBanners }: { initialBanners: PromoBanner[] }) {
+  const { isAdmin } = useAdmin();
   const [banners, setBanners] = useState(initialBanners);
   const [isEditing, setIsEditing] = useState(false);
-  
-  // Only the specified user can edit
-  const isAdmin = user?.email === 'innovacentra@gmail.com';
 
   const handleSave = async () => {
     try {
-      const result = await updateHomepageSettings("promo_banners", banners);
+      const token = await auth.currentUser?.getIdToken();
+      if (!token) throw new Error("You must be signed in as an admin.");
+      const result = await updateHomepageSettings("promo_banners", banners, token);
       if (result.success) {
         toast.success("Banners updated successfully!");
         setIsEditing(false);
       }
-    } catch (error: any) {
-      console.error("Failed to update banners: " + error.message);
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Unknown error";
+      console.error("Failed to update banners: " + message);
+      toast.error("Could not save the banners. Please try again.");
     }
   };
 
